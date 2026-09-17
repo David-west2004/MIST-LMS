@@ -7,7 +7,9 @@ import DashboardLayout from './pages/admin/DashboardLayout';
 import Students from './pages/admin/Students';
 import Curriculum from './pages/admin/Curriculum';
 import Invites from './pages/admin/Invites';
+import Assignments from './pages/admin/Assignments';
 import StudentDashboard from './pages/student/Dashboard';
+import StudentAssignments from './pages/student/StudentAssignments';
 
 // Route Guard for authenticated users
 const PrivateRoute = ({ children }) => {
@@ -53,6 +55,7 @@ function App() {
         }>
           <Route path="students" element={<Students />} />
           <Route path="curriculum" element={<Curriculum />} />
+          <Route path="assignments" element={<Assignments />} />
           <Route path="invites" element={<Invites />} />
         </Route>
 
@@ -60,6 +63,11 @@ function App() {
         <Route path="/student/curriculum" element={
           <PrivateRoute>
             <StudentDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/student/assignments" element={
+          <PrivateRoute>
+            <StudentAssignments />
           </PrivateRoute>
         } />
 

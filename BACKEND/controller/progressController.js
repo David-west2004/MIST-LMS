@@ -1,29 +1,50 @@
 const Progress = require('../model/Progress');
 const Curriculum = require('../model/Curriculum');
+const Assignment = require('../model/Assignment');
 const User = require('../model/User');
 
 const calculatePercentage = async (userId, unit) => {
+  // 1. Materials calculation (50% weight)
   const curriculum = await Curriculum.findOne({ unit });
-  if (!curriculum) return 0;
+  let totalMaterials = 0;
+  let completedMaterialsCount = 0;
 
-  const allMaterialIds = [];
-  curriculum.modules.forEach(module => {
-    module.materials.forEach(material => {
-      allMaterialIds.push(material._id.toString());
+  if (curriculum && curriculum.modules) {
+    const allMaterialIds = [];
+    curriculum.modules.forEach(module => {
+      (module.materials || []).forEach(material => {
+        allMaterialIds.push(material._id.toString());
+      });
     });
-  });
+    totalMaterials = allMaterialIds.length;
 
-  const totalMaterials = allMaterialIds.length;
-  if (totalMaterials === 0) return 0;
+    if (totalMaterials > 0) {
+      const progress = await Progress.findOne({ userId });
+      if (progress && progress.completedMaterials) {
+        completedMaterialsCount = progress.completedMaterials.filter(id => 
+          allMaterialIds.includes(id.toString())
+        ).length;
+      }
+    }
+  }
 
-  const progress = await Progress.findOne({ userId });
-  if (!progress) return 0;
+  // 2. Assignments calculation (50% weight)
+  const assignments = await Assignment.find({ unit });
+  const totalAssignments = assignments.length;
+  let submittedAssignmentsCount = 0;
 
-  const completedCount = progress.completedMaterials.filter(id => 
-    allMaterialIds.includes(id.toString())
-  ).length;
+  if (totalAssignments > 0) {
+    submittedAssignmentsCount = assignments.filter(assignment =>
+      (assignment.submissions || []).some(sub => sub.student && sub.student.toString() === userId.toString())
+    ).length;
+  }
 
-  return Math.round((completedCount / totalMaterials) * 100);
+  // 3. 50/50 Weighted Formula:
+  // Progress = (Completed Materials / Total Materials * 50%) + (Submitted Assignments / Total Assignments * 50%)
+  const materialsScore = totalMaterials > 0 ? (completedMaterialsCount / totalMaterials) * 50 : 0;
+  const assignmentsScore = totalAssignments > 0 ? (submittedAssignmentsCount / totalAssignments) * 50 : 0;
+
+  return Math.round(materialsScore + assignmentsScore);
 };
 
 const toggleMaterialStatus = async (req, res) => {

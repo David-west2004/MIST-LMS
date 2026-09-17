@@ -128,11 +128,40 @@ const deleteCurriculum = async (req, res) => {
   }
 };
 
+const path = require('path');
+
+const uploadMaterial = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const ext = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+    const fileUrl = `/uploads/materials/${req.file.filename}`;
+    let inferredType = 'pdf';
+    if (ext === 'mp4') inferredType = 'video';
+    else if (['doc', 'docx'].includes(ext)) inferredType = 'doc';
+    else if (ext === 'pdf') inferredType = 'pdf';
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        fileUrl,
+        fileName: req.file.originalname,
+        fileType: inferredType
+      }
+    });
+  } catch (error) {
+    console.error('Upload material error:', error.message);
+    return res.status(500).json({ message: error.message || 'Internal server error' });
+  }
+};
+
 module.exports = {
   createCurriculum,
   getCurricula,
   getCurriculumByUnit,
   getMyCurriculum,
   updateCurriculum,
-  deleteCurriculum
+  deleteCurriculum,
+  uploadMaterial
 };

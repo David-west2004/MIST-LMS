@@ -9,8 +9,9 @@ class APIError extends Error {
 
 const request = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers
   };
@@ -63,6 +64,11 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ token, password })
   }),
+  resetPassword: (token, newPassword) => request('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword })
+  }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: () => request('/auth/me'),
 
   // Curriculum Management
@@ -80,6 +86,10 @@ export const api = {
     method: 'DELETE'
   }),
   getCurriculumByUnit: (unit) => request(`/curriculum/unit/${encodeURIComponent(unit)}`),
+  uploadMaterialFile: (formData) => request('/curriculum/upload', {
+    method: 'POST',
+    body: formData
+  }),
 
   // Progress Tracking
   toggleMaterialStatus: (materialId) => request('/progress/toggle', {
@@ -89,15 +99,36 @@ export const api = {
   getMyProgress: () => request('/progress/my-progress'),
   getStudentProgress: (studentId) => request(`/progress/student/${studentId}`),
 
+  // Assignment Management
+  getAllAdminAssignments: (unit) => request(unit ? `/assignments?unit=${encodeURIComponent(unit)}` : '/assignments'),
+  getMyAssignments: () => request('/assignments/my-unit'),
+  getAssignmentsByUnit: (unit) => request(`/assignments/unit/${encodeURIComponent(unit)}`),
+  createAssignment: (data) => request('/assignments', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  deleteAssignment: (id) => request(`/assignments/${id}`, {
+    method: 'DELETE'
+  }),
+  submitAssignmentFile: (id, formData) => request(`/assignments/${id}/submit`, {
+    method: 'POST',
+    body: formData
+  }),
+
   // Student Administration (Admin-only)
   getAllStudents: () => request('/students'),
   toggleBlockStudent: (id, isBlocked) => request(`/students/${id}/block`, {
     method: 'PATCH',
     body: JSON.stringify({ isBlocked })
   }),
+  updateStudent: (id, data) => request(`/students/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
   updateStudentUnit: (id, unit) => request(`/students/${id}/unit`, {
     method: 'PATCH',
     body: JSON.stringify({ unit })
   })
 };
+
 export { APIError };

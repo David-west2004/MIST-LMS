@@ -26,6 +26,16 @@ const protect = async (req, res, next) => {
       return res.status(403).json({ message: 'Access denied. Account has been suspended.' });
     }
 
+    // Update lastActive timestamp on incoming requests (bypassing logout)
+    const isLogout = req.originalUrl && req.originalUrl.includes('/logout');
+    if (!isLogout) {
+      const now = new Date();
+      user.lastActive = now;
+      User.findByIdAndUpdate(user._id, { lastActive: now }).catch(err => {
+        console.error('Failed to update user lastActive:', err.message);
+      });
+    }
+
     req.user = user;
     next();
   } catch (error) {

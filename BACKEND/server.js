@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./db/connection');
@@ -7,6 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const curriculumRoutes = require('./routes/curriculumRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const studentRoutes = require('./routes/studentRoutes');
+const assignmentRoutes = require('./routes/assignmentRoutes');
 
 // Connect to database
 connectDB();
@@ -17,11 +19,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Mount routers
 app.use('/api/auth', authRoutes);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/students', studentRoutes);
+app.use('/api/assignments', assignmentRoutes);
 
 // Default API health status route
 app.get('/', (req, res) => {

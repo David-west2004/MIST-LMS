@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { CheckCircle, AlertCircle, Key, User, ShieldCheck } from 'lucide-react';
+import PasswordStrengthIndicator from '../components/PasswordStrengthIndicator';
+import { validatePasswordCriteria } from '../utils/passwordValidator';
+import mistLogo from '../assets/MIST.webp';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
@@ -38,8 +41,9 @@ const Register = () => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    const criteria = validatePasswordCriteria(password);
+    if (!criteria.isValid) {
+      setError('Password does not meet all required complexity criteria. Please check the rules below.');
       return;
     }
     if (password !== confirmPassword) {
@@ -72,7 +76,11 @@ const Register = () => {
     <div style={styles.container}>
       <div className="glass-card animate-slide-in" style={styles.card}>
         <div style={styles.header}>
-          <div style={styles.logoBadge}>MIST Registration</div>
+          <img 
+            src={mistLogo} 
+            alt="MIST Logo" 
+            style={{ height: '72px', width: 'auto', margin: '0 auto 16px', display: 'block', objectFit: 'contain' }} 
+          />
           <h1 style={styles.title}>Create Password</h1>
           <p style={styles.subtitle}>Complete your IT intern profile registration</p>
         </div>
@@ -112,12 +120,13 @@ const Register = () => {
                   type="password"
                   className="form-control"
                   style={styles.input}
-                  placeholder="At least 6 characters"
+                  placeholder="Min. 8 chars with Aa, 1, & symbols"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
+              <PasswordStrengthIndicator password={password} />
             </div>
 
             <div className="form-group">
@@ -169,46 +178,37 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: 'radial-gradient(circle at top, #111827 0%, #0b0f19 100%)',
+    backgroundColor: '#F7FAFC',
     padding: '20px',
   },
   card: {
     width: '100%',
     maxWidth: '440px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
+    padding: '36px',
   },
   header: {
     textAlign: 'center',
     marginBottom: '24px',
   },
-  logoBadge: {
-    display: 'inline-block',
-    backgroundColor: 'var(--color-success-light)',
-    color: 'var(--color-success)',
-    fontWeight: '700',
-    padding: '4px 12px',
-    borderRadius: '8px',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    marginBottom: '12px',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
-  },
   title: {
     fontFamily: 'var(--font-display)',
     fontSize: '1.75rem',
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#1A365D',
     marginBottom: '8px',
   },
   subtitle: {
     fontSize: '0.875rem',
-    color: 'var(--text-secondary)',
+    color: '#4A5568',
   },
   infoBox: {
-    backgroundColor: 'var(--bg-secondary)',
-    border: '1px solid var(--border-color)',
-    borderRadius: 'var(--radius-md)',
+    backgroundColor: '#F7FAFC',
+    border: '1px solid #E2E8F0',
+    borderRadius: '8px',
     padding: '16px',
     marginBottom: '24px',
     display: 'flex',
@@ -230,7 +230,7 @@ const styles = {
   infoValue: {
     fontSize: '0.875rem',
     fontWeight: '600',
-    color: '#ffffff',
+    color: '#1A365D',
   },
   inputContainer: {
     position: 'relative',
@@ -260,7 +260,7 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     marginBottom: '24px',
     fontSize: '0.875rem',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    border: '1px solid var(--color-danger-border)',
   }
 };
 

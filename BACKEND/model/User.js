@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema({
   isBlocked: { type: Boolean, default: false }, 
   inviteToken: { type: String, default: null }, 
   tokenExpires: { type: Date, default: null },
+  lastActive: { type: Date, default: null },
 }, { timestamps: true });
 
 // Pre-save middleware to hash password

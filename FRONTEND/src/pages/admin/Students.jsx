@@ -1,39 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { ShieldAlert, ShieldCheck, UserCheck, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, AlertTriangle, RotateCw } from 'lucide-react';
+import { isRecentlyActive, formatRelativeActivity } from '../../utils/timeAgo';
 
 const Students = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [units, setUnits] = useState([]);
 
   const fetchData = async () => {
     try {
-      const [studentsRes, curriculaRes] = await Promise.all([
-        api.getAllStudents(),
-        api.getCurricula()
-      ]);
+      const studentsRes = await api.getAllStudents();
       setStudents(studentsRes.data.students);
-      setUnits(curriculaRes.data.curricula.map(c => c.unit));
     } catch (err) {
-      setError(err.message || 'Failed to fetch student and unit data.');
+      setError(err.message || 'Failed to fetch student data.');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStudents = async () => {
-    try {
-      const res = await api.getAllStudents();
-      setStudents(res.data.students);
-    } catch (err) {
-      setError(err.message || 'Failed to fetch student logs.');
-    }
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
   };
 
   useEffect(() => {
     fetchData();
+    // Periodically refresh relative activity
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleToggleBlock = async (id, currentBlocked) => {
@@ -45,15 +42,6 @@ const Students = () => {
     }
   };
 
-  const handleUnitChange = async (id, newUnit) => {
-    try {
-      await api.updateStudentUnit(id, newUnit);
-      fetchStudents();
-    } catch (err) {
-      alert(err.message || 'Failed to update student unit.');
-    }
-  };
-
   if (loading) {
     return (
       <div style={styles.center}>
@@ -61,6 +49,8 @@ const Students = () => {
       </div>
     );
   }
+
+  const activeNowCount = students.filter(s => isRecentlyActive(s.lastActive)).length;
 
   return (
     <div className="animate-slide-in">
@@ -71,15 +61,57 @@ const Students = () => {
         </div>
       )}
 
+      {/* Toolbar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        padding: '12px 18px',
+        borderRadius: '8px',
+        border: '1px solid #E2E8F0',
+        marginBottom: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1A365D' }}>
+            Registered Interns: <strong>{students.length}</strong>
+          </span>
+          <span style={{ fontSize: '0.8125rem', color: '#006633', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#006633' }} />
+            Active Online Now: <strong>{activeNowCount}</strong>
+          </span>
+        </div>
+
+        <button 
+          onClick={handleRefresh} 
+          disabled={refreshing}
+          type="button"
+          className="btn btn-secondary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '0.8125rem',
+            padding: '6px 12px',
+            height: '32px'
+          }}
+          title="Refresh real-time activity status"
+        >
+          <RotateCw size={14} className={refreshing ? 'spinner' : ''} />
+          {refreshing ? 'Refreshing...' : 'Refresh Status'}
+        </button>
+      </div>
+
       <div className="table-container">
         <table className="custom-table">
           <thead>
             <tr>
               <th>Name</th>
               <th>Email</th>
-              <th>Unit</th>
+              <th>Assigned Unit</th>
               <th>Overall Progress</th>
-              <th>Status</th>
+              <th>Activity Status</th>
+              <th>Account</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -90,23 +122,40 @@ const Students = () => {
                   <td style={styles.boldText}>{student.name}</td>
                   <td>{student.email}</td>
                   <td>
-                    <select
-                      value={student.unit}
-                      onChange={(e) => handleUnitChange(student._id, e.target.value)}
-                      style={styles.select}
-                    >
-                      {(units.includes(student.unit) ? units : [...units, student.unit]).map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                    </select>
+                    {/* Read-only static badge for locked unit */}
+                    <span style={styles.unitBadge}>
+                      {student.unit}
+                    </span>
                   </td>
-                  <td style={{ width: '220px' }}>
+                  <td style={{ width: '200px' }}>
                     <div style={styles.progressColumn}>
                       <span style={styles.progressText}>{student.progressPercentage}%</span>
                       <div className="progress-bar-container">
-                        <div className="progress-bar-fill" style={{ width: `${student.progressPercentage}%` }} />
+                        <div 
+                          className="progress-bar-fill" 
+                          style={{ 
+                            width: `${student.progressPercentage}%`,
+                            backgroundColor: '#006633' 
+                          }} 
+                        />
                       </div>
                     </div>
+                  </td>
+                  <td>
+                    {/* Real-Time Activity Monitoring */}
+                    {isRecentlyActive(student.lastActive) ? (
+                      <div style={styles.activityContainer}>
+                        <span style={styles.pulseContainer}>
+                          <span style={styles.pulsePing} />
+                          <span style={styles.pulseDot} />
+                        </span>
+                        <span style={styles.activeText}>Active now</span>
+                      </div>
+                    ) : (
+                      <span style={styles.inactiveText}>
+                        {formatRelativeActivity(student.lastActive)}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {student.isBlocked ? (
@@ -121,6 +170,7 @@ const Students = () => {
                   </td>
                   <td>
                     <button
+                      type="button"
                       onClick={() => handleToggleBlock(student._id, student.isBlocked)}
                       className={`btn btn-sm ${student.isBlocked ? 'btn-secondary' : 'btn-danger'}`}
                       style={styles.actionBtn}
@@ -142,7 +192,7 @@ const Students = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="6" style={styles.emptyRow}>No students registered. Send invites to get started.</td>
+                <td colSpan="7" style={styles.emptyRow}>No students registered. Send invites to get started.</td>
               </tr>
             )}
           </tbody>
@@ -160,7 +210,56 @@ const styles = {
   },
   boldText: {
     fontWeight: '600',
-    color: '#ffffff',
+    color: '#1A365D',
+  },
+  unitBadge: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    backgroundColor: '#EDF2F7',
+    color: '#1A365D',
+    borderRadius: '4px',
+    fontSize: '0.8125rem',
+    fontWeight: '600',
+    border: '1px solid #CBD5E0',
+    letterSpacing: '0.3px',
+  },
+  activityContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  pulseContainer: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '10px',
+    height: '10px',
+  },
+  pulsePing: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: '50%',
+    backgroundColor: '#006633',
+    opacity: 0.75,
+    animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+  },
+  pulseDot: {
+    position: 'relative',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: '#006633',
+  },
+  activeText: {
+    color: '#006633',
+    fontWeight: '600',
+    fontSize: '0.8125rem',
+  },
+  inactiveText: {
+    color: '#718096',
+    fontSize: '0.8125rem',
   },
   progressColumn: {
     display: 'flex',
@@ -170,16 +269,7 @@ const styles = {
   progressText: {
     fontSize: '0.8125rem',
     fontWeight: '600',
-    color: 'var(--text-secondary)',
-  },
-  select: {
-    backgroundColor: 'var(--bg-primary)',
-    border: '1px solid var(--border-color)',
-    borderRadius: 'var(--radius-sm)',
-    padding: '6px 10px',
-    color: '#ffffff',
-    outline: 'none',
-    cursor: 'pointer',
+    color: '#4A5568',
   },
   actionBtn: {
     gap: '6px',
@@ -188,19 +278,19 @@ const styles = {
   },
   emptyRow: {
     textAlign: 'center',
-    color: 'var(--text-secondary)',
+    color: '#718096',
     padding: '32px',
   },
   errorAlert: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
-    backgroundColor: 'var(--color-danger-light)',
-    color: 'var(--color-danger)',
+    backgroundColor: 'rgba(197, 48, 48, 0.1)',
+    color: '#C53030',
     padding: '12px 16px',
-    borderRadius: 'var(--radius-md)',
+    borderRadius: '6px',
     marginBottom: '20px',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    border: '1px solid rgba(197, 48, 48, 0.2)',
   }
 };
 

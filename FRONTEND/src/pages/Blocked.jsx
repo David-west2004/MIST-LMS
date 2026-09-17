@@ -47,13 +47,13 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: 'radial-gradient(circle at top, #1e1b4b 0%, #0b0f19 100%)',
+    background: 'radial-gradient(circle at top, var(--color-danger-light) 0%, var(--bg-primary) 100%)',
     padding: '20px',
   },
   card: {
     width: '100%',
     maxWidth: '480px',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    border: '1px solid var(--color-danger-border)',
     textAlign: 'center',
   },
   iconContainer: {
@@ -64,7 +64,7 @@ const styles = {
     padding: '16px',
     borderRadius: '50%',
     marginBottom: '24px',
-    border: '1px solid rgba(239, 68, 68, 0.3)',
+    border: '1px solid var(--color-danger-border)',
   },
   icon: {
     color: 'var(--color-danger)',

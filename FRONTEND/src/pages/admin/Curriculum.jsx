@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { Plus, Trash2, Save, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Save, AlertTriangle, Upload, CheckCircle2 } from 'lucide-react';
 
 const Curriculum = () => {
   const [units, setUnits] = useState([]);
@@ -8,6 +8,7 @@ const Curriculum = () => {
   const [curriculum, setCurriculum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingState, setUploadingState] = useState({}); // { `${modIdx}-${matIdx}`: true }
 
   // States for adding a new unit
   const [showAddUnit, setShowAddUnit] = useState(false);
@@ -77,7 +78,7 @@ const Curriculum = () => {
 
     setCreatingUnit(true);
     try {
-      const res = await api.createCurriculum(trimmed, []);
+      await api.createCurriculum(trimmed, []);
       alert(`Unit "${trimmed}" added successfully.`);
       setNewUnitName('');
       setShowAddUnit(false);
@@ -89,70 +90,181 @@ const Curriculum = () => {
     }
   };
 
-  const handleAddModule = () => {
-    setCurriculum(prev => ({
-      ...prev,
-      modules: [
-        ...prev.modules,
-        {
-          title: `New Module ${prev.modules.length + 1}`,
-          description: '',
-          materials: []
-        }
-      ]
-    }));
+  // 100% Immutable Module addition
+  const handleAddModule = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setCurriculum(prev => {
+      if (!prev) return prev;
+      const currentModules = prev.modules || [];
+      return {
+        ...prev,
+        modules: [
+          ...currentModules,
+          {
+            title: `New Module ${currentModules.length + 1}`,
+            description: '',
+            materials: []
+          }
+        ]
+      };
+    });
   };
 
-  const handleRemoveModule = (modIdx) => {
-    setCurriculum(prev => ({
-      ...prev,
-      modules: prev.modules.filter((_, idx) => idx !== modIdx)
-    }));
+  // 100% Immutable Module removal
+  const handleRemoveModule = (modIdx, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setCurriculum(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        modules: (prev.modules || []).filter((_, idx) => idx !== modIdx)
+      };
+    });
   };
 
+  // 100% Immutable Module change
   const handleModuleChange = (modIdx, field, value) => {
     setCurriculum(prev => {
-      const updatedModules = [...prev.modules];
-      updatedModules[modIdx] = {
-        ...updatedModules[modIdx],
-        [field]: value
+      if (!prev) return prev;
+      return {
+        ...prev,
+        modules: (prev.modules || []).map((mod, idx) => {
+          if (idx !== modIdx) return mod;
+          return {
+            ...mod,
+            [field]: value
+          };
+        })
       };
-      return { ...prev, modules: updatedModules };
     });
   };
 
-  const handleAddMaterial = (modIdx) => {
+  // 100% Immutable Material addition
+  const handleAddMaterial = (modIdx, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setCurriculum(prev => {
-      const updatedModules = [...prev.modules];
-      updatedModules[modIdx].materials.push({
-        title: 'New Resource',
-        type: 'pdf',
-        url: 'https://example.com'
-      });
-      return { ...prev, modules: updatedModules };
+      if (!prev) return prev;
+      return {
+        ...prev,
+        modules: (prev.modules || []).map((mod, idx) => {
+          if (idx !== modIdx) return mod;
+          return {
+            ...mod,
+            materials: [
+              ...(mod.materials || []),
+              {
+                title: 'New Resource',
+                type: 'pdf',
+                url: ''
+              }
+            ]
+          };
+        })
+      };
     });
   };
 
-  const handleRemoveMaterial = (modIdx, matIdx) => {
+  // 100% Immutable Material removal
+  const handleRemoveMaterial = (modIdx, matIdx, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setCurriculum(prev => {
-      const updatedModules = [...prev.modules];
-      updatedModules[modIdx].materials = updatedModules[modIdx].materials.filter((_, idx) => idx !== matIdx);
-      return { ...prev, modules: updatedModules };
+      if (!prev) return prev;
+      return {
+        ...prev,
+        modules: (prev.modules || []).map((mod, idx) => {
+          if (idx !== modIdx) return mod;
+          return {
+            ...mod,
+            materials: (mod.materials || []).filter((_, mIdx) => mIdx !== matIdx)
+          };
+        })
+      };
     });
   };
 
+  // 100% Immutable Material field change
   const handleMaterialChange = (modIdx, matIdx, field, value) => {
     setCurriculum(prev => {
-      const updatedModules = [...prev.modules];
-      updatedModules[modIdx].materials[matIdx] = {
-        ...updatedModules[modIdx].materials[matIdx],
-        [field]: value
+      if (!prev) return prev;
+      return {
+        ...prev,
+        modules: (prev.modules || []).map((mod, idx) => {
+          if (idx !== modIdx) return mod;
+          return {
+            ...mod,
+            materials: (mod.materials || []).map((mat, mIdx) => {
+              if (mIdx !== matIdx) return mat;
+              return {
+                ...mat,
+                [field]: value
+              };
+            })
+          };
+        })
       };
-      return { ...prev, modules: updatedModules };
     });
   };
 
-  const handleSave = async () => {
+  // Local File Upload handler for Admin
+  const handleFileUpload = async (modIdx, matIdx, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const key = `${modIdx}-${matIdx}`;
+    setUploadingState(prev => ({ ...prev, [key]: true }));
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await api.uploadMaterialFile(formData);
+      const { fileUrl, fileName, fileType } = res.data;
+
+      setCurriculum(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          modules: (prev.modules || []).map((mod, idx) => {
+            if (idx !== modIdx) return mod;
+            return {
+              ...mod,
+              materials: (mod.materials || []).map((mat, mIdx) => {
+                if (mIdx !== matIdx) return mat;
+                return {
+                  ...mat,
+                  title: mat.title === 'New Resource' || !mat.title ? fileName : mat.title,
+                  type: fileType || mat.type || 'pdf',
+                  url: fileUrl
+                };
+              })
+            };
+          })
+        };
+      });
+    } catch (err) {
+      alert(err.message || 'Failed to upload material file.');
+    } finally {
+      setUploadingState(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleSave = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setSaving(true);
     try {
       if (curriculum._id) {
@@ -174,7 +286,11 @@ const Curriculum = () => {
     }
   };
 
-  const handleDeleteCurriculum = async () => {
+  const handleDeleteCurriculum = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!curriculum._id) return;
     if (!window.confirm(`Are you sure you want to delete the curriculum for ${selectedUnit}?`)) return;
 
@@ -204,6 +320,7 @@ const Curriculum = () => {
           {units.map((unit) => (
             <button
               key={unit}
+              type="button"
               onClick={() => setSelectedUnit(unit)}
               className={`editor-unit-btn ${unit === selectedUnit ? 'active' : ''}`}
             >
@@ -220,6 +337,7 @@ const Curriculum = () => {
         <div style={{ padding: '16px 0 0', borderTop: '1px solid var(--border-color)', marginTop: '16px' }}>
           {!showAddUnit ? (
             <button
+              type="button"
               onClick={() => setShowAddUnit(true)}
               className="btn btn-secondary btn-sm"
               style={{ width: '100%', gap: '6px', justifyContent: 'center', height: '36px' }}
@@ -271,7 +389,7 @@ const Curriculum = () => {
         ) : !selectedUnit || !curriculum ? (
           <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 32px', color: 'var(--text-secondary)', textAlign: 'center' }}>
             <AlertTriangle size={32} style={{ color: 'var(--color-primary)', marginBottom: '16px' }} />
-            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: '700', color: '#ffffff', marginBottom: '8px', fontSize: '1.25rem' }}>No Unit Selected</h3>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: '700', color: '#1A365D', marginBottom: '8px', fontSize: '1.25rem' }}>No Unit Selected</h3>
             <p style={{ maxWidth: '360px', fontSize: '0.875rem', margin: '0 auto', lineHeight: '1.5' }}>
               Please select a department/unit from the sidebar, or create a new one to define its curriculum and modules.
             </p>
@@ -287,12 +405,22 @@ const Curriculum = () => {
               </div>
               <div className="editor-header-actions">
                 {curriculum._id && (
-                  <button onClick={handleDeleteCurriculum} className="btn btn-danger btn-sm" style={{ marginRight: '10px' }}>
+                  <button 
+                    type="button" 
+                    onClick={handleDeleteCurriculum} 
+                    className="btn btn-danger btn-sm" 
+                    style={{ marginRight: '10px' }}
+                  >
                     <Trash2 size={16} />
                     Delete
                   </button>
                 )}
-                <button onClick={handleSave} className="btn btn-primary" disabled={saving}>
+                <button 
+                  type="button" 
+                  onClick={handleSave} 
+                  className="btn btn-primary" 
+                  disabled={saving}
+                >
                   <Save size={18} />
                   {saving ? 'Saving...' : 'Save Curriculum'}
                 </button>
@@ -300,7 +428,7 @@ const Curriculum = () => {
             </div>
 
             <div className="editor-modules-list">
-              {curriculum.modules.map((module, modIdx) => (
+              {(curriculum.modules || []).map((module, modIdx) => (
                 <div key={modIdx} className="glass-card editor-module-card">
                   <div className="editor-module-meta">
                     <div style={{ flex: 1 }}>
@@ -320,7 +448,8 @@ const Curriculum = () => {
                       />
                     </div>
                     <button
-                      onClick={() => handleRemoveModule(modIdx)}
+                      type="button"
+                      onClick={(e) => handleRemoveModule(modIdx, e)}
                       className="editor-delete-module-btn"
                       title="Remove Module"
                     >
@@ -331,48 +460,94 @@ const Curriculum = () => {
                   <div className="editor-materials-section">
                     <h4 className="editor-materials-title">Resources / Materials</h4>
                     <div className="editor-materials-list">
-                      {module.materials.map((material, matIdx) => (
-                        <div key={matIdx} className="editor-material-row">
-                          <input
-                            type="text"
-                            className="form-control editor-material-name-input"
-                            value={material.title}
-                            onChange={(e) => handleMaterialChange(modIdx, matIdx, 'title', e.target.value)}
-                            placeholder="Resource Name"
-                          />
+                      {(module.materials || []).map((material, matIdx) => {
+                        const uploadKey = `${modIdx}-${matIdx}`;
+                        const isUploading = uploadingState[uploadKey];
 
-                          <select
-                            value={material.type}
-                            onChange={(e) => handleMaterialChange(modIdx, matIdx, 'type', e.target.value)}
-                            className="editor-material-type-select"
-                          >
-                            <option value="pdf">PDF</option>
-                            <option value="video">Video</option>
-                            <option value="link">Link</option>
-                            <option value="doc">Document</option>
-                          </select>
+                        return (
+                          <div key={matIdx} className="editor-material-row">
+                            <input
+                              type="text"
+                              className="form-control editor-material-name-input"
+                              value={material.title}
+                              onChange={(e) => handleMaterialChange(modIdx, matIdx, 'title', e.target.value)}
+                              placeholder="Resource Name"
+                            />
 
-                          <input
-                            type="text"
-                            className="form-control editor-material-url-input"
-                            value={material.url}
-                            onChange={(e) => handleMaterialChange(modIdx, matIdx, 'url', e.target.value)}
-                            placeholder="Resource URL"
-                          />
+                            {/* Dropdown with only file formats (LINK removed) */}
+                            <select
+                              value={material.type}
+                              onChange={(e) => handleMaterialChange(modIdx, matIdx, 'type', e.target.value)}
+                              className="editor-material-type-select"
+                            >
+                              <option value="pdf">PDF Document</option>
+                              <option value="doc">Document (.doc, .docx)</option>
+                              <option value="video">Video (.mp4)</option>
+                            </select>
 
-                          <button
-                            onClick={() => handleRemoveMaterial(modIdx, matIdx)}
-                            className="editor-delete-material-btn"
-                            title="Delete Resource"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ))}
+                            {/* File Upload Control replacing raw URL text field */}
+                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <label 
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  padding: '6px 12px',
+                                  backgroundColor: '#EDF2F7',
+                                  color: '#1A365D',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '600',
+                                  cursor: 'pointer',
+                                  border: '1px solid #CBD5E0',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                <Upload size={13} />
+                                {isUploading ? 'Uploading...' : material.url ? 'Replace File' : 'Choose File'}
+                                <input
+                                  type="file"
+                                  accept=".pdf,.doc,.docx,.mp4"
+                                  style={{ display: 'none' }}
+                                  disabled={isUploading}
+                                  onChange={(e) => handleFileUpload(modIdx, matIdx, e)}
+                                />
+                              </label>
+
+                              {material.url ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#006633' }}>
+                                  <CheckCircle2 size={13} />
+                                  <a 
+                                    href={material.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    style={{ color: '#006633', textDecoration: 'underline', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                    title={material.url}
+                                  >
+                                    {material.url.split('/').pop()}
+                                  </a>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: '#718096' }}>No file uploaded</span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveMaterial(modIdx, matIdx, e)}
+                              className="editor-delete-material-btn"
+                              title="Delete Resource"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <button
-                      onClick={() => handleAddMaterial(modIdx)}
+                      type="button"
+                      onClick={(e) => handleAddMaterial(modIdx, e)}
                       className="btn btn-secondary btn-sm editor-add-material-btn"
                     >
                       <Plus size={14} />
@@ -384,6 +559,7 @@ const Curriculum = () => {
             </div>
 
             <button
+              type="button"
               onClick={handleAddModule}
               className="btn btn-secondary editor-add-module-dash-btn"
             >

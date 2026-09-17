@@ -1,12 +1,15 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
 const User = require('../model/User');
 const Progress = require('../model/Progress');
 const nodemailer = require('nodemailer');
+const { generateInviteEmailHtml } = require('../utils/emailTemplate');
 
 const signToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'supersecretkeyformiststudentitportal2026', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h'
   });
 };
 
@@ -23,10 +26,13 @@ const login = async (req, res) => {
     }
 
     if (user.isBlocked) {
-      return res.status(403).json({ message: 'Access denied. Account has been suspended.' });
+      return res.status(403).json({ message: 'Access denied. Please, reach out to the system administrator.' });
     }
 
     const token = signToken(user._id);
+    const now = new Date();
+    await User.findByIdAndUpdate(user._id, { lastActive: now });
+    user.lastActive = now;
     user.password = undefined;
 
     return res.status(200).json({
@@ -40,7 +46,7 @@ const login = async (req, res) => {
   }
 };
 
-const inviteStudent = async (req, res) => {
+const registerNewStudent = async (req, res) => {
   try {
     const { name, email, unit } = req.body;
     if (!name || !email || !unit) {
@@ -85,16 +91,23 @@ const inviteStudent = async (req, res) => {
           }
         });
 
+        const mistLogoPath = path.join(__dirname, '../assets/MIST.webp');
+        const attachments = fs.existsSync(mistLogoPath) ? [
+          {
+            filename: 'MIST.webp',
+            path: mistLogoPath,
+            cid: 'mistLogo' // referenced in HTML email template as cid:mistLogo
+          }
+        ] : [];
+
         await transporter.sendMail({
-          from: process.env.SMTP_FROM || 'no-reply@mist.gov.ng',
+          from: process.env.SMTP_FROM || '"MIST Student Portal" <no-reply@mist.gov.ng>',
           to: email,
-          subject: 'MIST Student IT Portal Invitation',
-          html: `<p>Hello ${name},</p>
-                 <p>You have been invited to register for the MIST Student IT Portal as a student in the <strong>${unit}</strong> unit.</p>
-                 <p>Please click the link below to set your password and complete your registration (valid for 48 hours):</p>
-                 <p><a href="${inviteLink}">${inviteLink}</a></p>`
+          subject: 'Official Invitation // MIST Student IT Portal',
+          html: generateInviteEmailHtml({ name, email, unit, inviteLink }),
+          attachments
         });
-        console.log(`Email sent successfully to ${email}`);
+        console.log(`Official branded invite email dispatched successfully to ${email}`);
       } catch (err) {
         console.error('Failed to send invite email:', err.message);
       }
@@ -140,11 +153,27 @@ const verifyInviteToken = async (req, res) => {
   }
 };
 
+const validatePasswordComplexity = (password) => {
+  if (typeof password !== 'string') return false;
+  if (password.length < 8) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  if (!/[@$!%*?&#^()_+\-=[\]{}|;:,.<>]/.test(password)) return false;
+  return true;
+};
+
 const completeRegistration = async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
       return res.status(400).json({ message: 'Token and password are required' });
+    }
+
+    if (!validatePasswordComplexity(password)) {
+      return res.status(400).json({
+        message: 'Password does not meet complexity requirements: minimum 8 characters, at least one uppercase letter, one lowercase letter, one digit, and one special symbol (@$!%*?&#^()_+-=[]{}|;:,.<>).'
+      });
     }
 
     const user = await User.findOne({
@@ -205,10 +234,65 @@ const getMe = async (req, res) => {
   }
 };
 
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    if (!validatePasswordComplexity(newPassword)) {
+      return res.status(400).json({
+        message: 'Password does not meet complexity requirements: minimum 8 characters, at least one uppercase letter, one lowercase letter, one digit, and one special symbol (@$!%*?&#^()_+-=[]{}|;:,.<>).'
+      });
+    }
+
+    const user = await User.findOne({
+      inviteToken: token,
+      tokenExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Token is invalid or has expired' });
+    }
+
+    user.password = newPassword;
+    user.inviteToken = null;
+    user.tokenExpires = null;
+    await user.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Password reset successfully.'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+const logout = async (req, res) => {
+  try {
+    if (req.user && req.user._id) {
+      await User.findByIdAndUpdate(req.user._id, { $set: { lastActive: null } });
+    }
+    return res.status(200).json({
+      status: 'success',
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   login,
-  inviteStudent,
+  registerNewStudent,
   verifyInviteToken,
   completeRegistration,
+  resetPassword,
+  logout,
   getMe
 };
+

@@ -1,21 +1,30 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, BookOpen, UserPlus, LogOut, Shield } from 'lucide-react';
+import { Users, BookOpen, UserPlus, LogOut, Shield, FileText } from 'lucide-react';
+import { api } from '../../services/api';
+import mistLogo from '../../assets/MIST.webp';
 
 const DashboardLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      console.error('Logout error:', err.message);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
   };
 
   const navItems = [
     { path: '/admin/students', label: 'IT Students', icon: <Users size={18} /> },
     { path: '/admin/curriculum', label: 'Curriculums', icon: <BookOpen size={18} /> },
+    { path: '/admin/assignments', label: 'Assignments', icon: <FileText size={18} /> },
     { path: '/admin/invites', label: 'Send Invites', icon: <UserPlus size={18} /> }
   ];
 
@@ -25,7 +34,11 @@ const DashboardLayout = () => {
       <aside style={styles.sidebar}>
         <div style={styles.sidebarHeader}>
           <div style={styles.logoContainer}>
-            <Shield size={20} style={{ color: 'var(--color-primary)' }} />
+            <img 
+              src={mistLogo} 
+              alt="MIST Logo" 
+              style={{ height: '32px', width: 'auto', objectFit: 'contain' }} 
+            />
             <span style={styles.logoText}>MIST Admin</span>
           </div>
           <p style={styles.sidebarSubtitle}>IT Portal Controller</p>

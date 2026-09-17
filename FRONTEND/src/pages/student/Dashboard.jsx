@@ -1,7 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
-import { LogOut, BookOpen, ExternalLink, CheckCircle, FileText, Video, Link, HelpCircle } from 'lucide-react';
+import { 
+  LogOut, 
+  ExternalLink, 
+  Check, 
+  Search, 
+  ChevronRight, 
+  ShieldCheck, 
+  Clock, 
+  AlertTriangle,
+  FileCode,
+  Compass
+} from 'lucide-react';
+import './StudentDashboard.css';
+import mistLogo from '../../assets/MIST.webp';
 
 const StudentDashboard = () => {
   const [curriculum, setCurriculum] = useState(null);
@@ -10,6 +23,12 @@ const StudentDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // Navigation & Workspace State
+  const [activeModuleIndex, setActiveModuleIndex] = useState(0);
+  const [filterType, setFilterType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
+
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const navigate = useNavigate();
 
@@ -19,11 +38,20 @@ const StudentDashboard = () => {
         api.getMyCurriculum(),
         api.getMyProgress()
       ]);
-      setCurriculum(currRes.data.curriculum);
-      setCompletedMaterials(progRes.data.completedMaterials);
-      setPercentage(progRes.data.percentage);
+      const curr = currRes.data?.curriculum || null;
+      setCurriculum(curr);
+      const completed = progRes.data?.completedMaterials || [];
+      setCompletedMaterials(completed);
+      setPercentage(progRes.data?.percentage || 0);
+
+      // Default selected material to first incomplete or first available
+      if (curr?.modules?.length > 0) {
+        const firstModule = curr.modules[0];
+        const initialMat = firstModule.materials?.find(m => !completed.includes(m._id)) || firstModule.materials?.[0];
+        setSelectedMaterial(initialMat || null);
+      }
     } catch (err) {
-      setError(err.message || 'Failed to retrieve curriculum data.');
+      setError(err.message || 'Failed to retrieve curriculum trajectory.');
     } finally {
       setLoading(false);
     }
@@ -33,429 +61,509 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
-  const handleToggleMaterial = async (materialId) => {
+  const handleToggleMaterial = async (materialId, e) => {
+    if (e) e.stopPropagation();
     try {
       const res = await api.toggleMaterialStatus(materialId);
       setCompletedMaterials(res.data.completedMaterials);
       setPercentage(res.data.percentage);
     } catch (err) {
-      console.error('Error toggling progress:', err.message);
+      console.error('Error toggling verification state:', err.message);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-
-  const getMaterialIcon = (type) => {
-    switch (type) {
-      case 'pdf': return <FileText size={18} style={{ color: '#ef4444' }} />;
-      case 'video': return <Video size={18} style={{ color: '#3b82f6' }} />;
-      case 'link': return <Link size={18} style={{ color: '#10b981' }} />;
-      case 'doc': return <FileText size={18} style={{ color: '#f59e0b' }} />;
-      default: return <HelpCircle size={18} />;
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (err) {
+      console.error('Logout error:', err.message);
+    } finally {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
     }
   };
 
-  const countTotalMaterials = () => {
-    if (!curriculum) return 0;
-    return curriculum.modules.reduce((sum, mod) => sum + mod.materials.length, 0);
-  };
+  // Aggregated calculations
+  const modules = curriculum?.modules || [];
+  const currentModule = modules[activeModuleIndex] || modules[0] || null;
+
+  const totalMaterialsCount = useMemo(() => {
+    return modules.reduce((sum, mod) => sum + (mod.materials?.length || 0), 0);
+  }, [modules]);
+
+  const completedCount = completedMaterials.length;
+  const remainingCount = Math.max(0, totalMaterialsCount - completedCount);
+
+  // Filtered materials for currently viewed module
+  const displayedMaterials = useMemo(() => {
+    if (!currentModule || !currentModule.materials) return [];
+    return currentModule.materials.filter((mat) => {
+      const matchesFilter = filterType === 'all' || mat.type === filterType;
+      const matchesSearch = !searchQuery || 
+        mat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        mat.type.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesFilter && matchesSearch;
+    });
+  }, [currentModule, filterType, searchQuery]);
+
+  // Compute clearance readiness
+  const isClearanceReady = percentage === 100 && totalMaterialsCount > 0;
 
   if (loading) {
     return (
-      <div style={styles.loaderContainer}>
-        <div className="spinner" />
+      <div className="lms-empty-state">
+        <div className="lms-empty-terminal" style={{ maxWidth: '400px' }}>
+          <div className="lms-terminal-header">
+            <div className="lms-pulse-indicator" />
+            <span className="lms-terminal-title">INITIALIZING WORKSTATION // MIST_TELEMETRY</span>
+          </div>
+          <p className="lms-empty-text">Authenticating intern session and mounting unit curriculum...</p>
+        </div>
       </div>
     );
   }
 
-  const totalMaterials = countTotalMaterials();
-  const completedCount = completedMaterials.length;
-
   return (
-    <div style={styles.container}>
-      {/* Navbar */}
-      <header style={styles.header}>
-        <div style={styles.brand}>
-          <div style={styles.logoBadge}>MIST</div>
-          <div>
-            <h1 style={styles.headerTitle}>IT Intern Portal</h1>
-            <p style={styles.headerSubtitle}>{user.unit} Unit</p>
+    <div className="lms-console">
+      {/* 1. TOP COMMAND & TELEMETRY BAR */}
+      <header className="lms-command-bar">
+        <div className="lms-brand-cluster">
+          <div className="lms-civic-badge">
+            <img 
+              src={mistLogo} 
+              alt="Lagos State MIST Coat of Arms" 
+              style={{ height: '28px', width: 'auto', objectFit: 'contain' }} 
+            />
+            <span className="lms-civic-label">LAGOS STATE // MIST</span>
+          </div>
+
+          <div className="lms-brand-divider" />
+
+          <div className="lms-system-title-group">
+            <h1 className="lms-system-title">Student IT Portal</h1>
+            <span className="lms-system-subtitle">INTERN LEARNING PORTAL</span>
           </div>
         </div>
 
-        <div style={styles.userSection}>
-          <div style={styles.userInfo}>
-            <span style={styles.userName}>{user.name}</span>
-            <span style={styles.userEmail}>{user.email}</span>
+        {/* Center System Telemetry HUD */}
+        <div className="lms-telemetry-hud">
+          <div className="lms-hud-chip">
+            <div className="lms-pulse-indicator" />
+            <span>STATUS: <strong>ONLINE</strong></span>
           </div>
-          <button onClick={handleLogout} className="btn btn-secondary btn-sm" style={styles.logoutBtn}>
-            <LogOut size={16} />
-            Logout
+          <div className="lms-hud-chip">
+            <span>UNIT // <strong>{user.unit || 'GENERAL'}</strong></span>
+          </div>
+          <div className="lms-hud-chip">
+            <span>STUDENT ID // <strong>{user._id ? user._id.slice(-6).toUpperCase() : 'STU-01'}</strong></span>
+          </div>
+        </div>
+
+        {/* User Identity & Exit Action */}
+        <div className="lms-user-deck">
+          <button 
+            onClick={() => navigate('/student/assignments')}
+            style={{
+              backgroundColor: '#1A365D',
+              color: '#ffffff',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginRight: '8px'
+            }}
+          >
+            Assignments
+          </button>
+          <div className="lms-user-meta">
+            <span className="lms-user-name">{user.name || 'Student Intern'}</span>
+            <span className="lms-user-tag">{user.email}</span>
+          </div>
+          <button 
+            onClick={handleLogout} 
+            className="lms-btn-exit"
+            title="Terminate session"
+          >
+            <LogOut size={13} />
+            EXIT
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main style={styles.mainContent}>
-        {error ? (
-          <div className="glass-card animate-slide-in" style={styles.errorCard}>
-            <h2 style={{ color: 'var(--color-danger)' }}>Curriculum Missing</h2>
-            <p style={{ marginTop: '8px', color: 'var(--text-secondary)' }}>{error}</p>
-            <p style={{ fontSize: '0.875rem', marginTop: '16px', color: 'var(--text-muted)' }}>
-              Please request your supervisor to configure a learning path for the <strong>{user.unit}</strong> unit.
+      {/* 2. MAIN WORKBENCH GRID */}
+      {error ? (
+        <main className="lms-empty-state">
+          <div className="lms-empty-terminal">
+            <div className="lms-terminal-header">
+              <div className="lms-terminal-dot" />
+              <span className="lms-terminal-title">CURRICULUM_NOT_FOUND // STATUS_ERR</span>
+            </div>
+            <p className="lms-empty-text" style={{ color: '#f87171', marginBottom: '12px' }}>
+              {error}
+            </p>
+            <p className="lms-empty-text">
+              No learning curriculum is currently registered for unit <strong>"{user.unit}"</strong>. 
+              Contact your designated MIST supervisor to deploy the syllabus for your track.
             </p>
           </div>
-        ) : (
-          <div className="student-dashboard-layout" style={styles.layoutGrid}>
-            {/* Left: Curriculum modules */}
-            <div style={styles.curriculumSection}>
-              <h2 style={styles.sectionTitle}>
-                <BookOpen size={22} style={{ color: 'var(--color-primary)' }} />
-                Learning Curriculum
-              </h2>
+        </main>
+      ) : modules.length === 0 ? (
+        <main className="lms-empty-state">
+          <div className="lms-empty-terminal">
+            <div className="lms-terminal-header">
+              <div className="lms-terminal-dot" style={{ backgroundColor: '#d99b00' }} />
+              <span className="lms-terminal-title">TRACK_UNINITIALIZED // EMPTY_SYLLABUS</span>
+            </div>
+            <p className="lms-empty-text">
+              Your unit <strong>"{user.unit}"</strong> has no curriculum modules published yet. 
+              Modules will appear as soon as the administrative team approves them.
+            </p>
+          </div>
+        </main>
+      ) : (
+        <div className="lms-workbench">
+          {/* =================================================================
+             ZONE 1: MODULE TRAJECTORY RAIL (LEFT)
+             ================================================================= */}
+          <aside className="lms-nav-rail">
+            <div className="lms-rail-header">
+              <span className="lms-rail-title">Trajectory Modules</span>
+              <span className="lms-rail-count">{modules.length} UNITS</span>
+            </div>
 
-              <div style={styles.modulesContainer}>
-                {curriculum?.modules.map((module, index) => (
-                  <div key={module._id} className="glass-card" style={styles.moduleCard}>
-                    <div style={styles.moduleHeader}>
-                      <span style={styles.moduleNumber}>Module {index + 1}</span>
-                      <h3 style={styles.moduleTitle}>{module.title}</h3>
-                      {module.description && <p style={styles.moduleDesc}>{module.description}</p>}
+            <div className="lms-module-nav-list">
+              {modules.map((mod, index) => {
+                const modMaterials = mod.materials || [];
+                const modCompleted = modMaterials.filter(m => completedMaterials.includes(m._id)).length;
+                const isModComplete = modMaterials.length > 0 && modCompleted === modMaterials.length;
+                const isActive = index === activeModuleIndex;
+
+                let statusClass = 'pending';
+                let statusLabel = 'PENDING';
+                if (isModComplete) {
+                  statusClass = 'complete';
+                  statusLabel = 'VERIFIED';
+                } else if (modCompleted > 0 || isActive) {
+                  statusClass = 'active';
+                  statusLabel = 'IN_FLIGHT';
+                }
+
+                const fillWidth = modMaterials.length > 0 
+                  ? Math.round((modCompleted / modMaterials.length) * 100) 
+                  : 0;
+
+                return (
+                  <button
+                    key={mod._id || index}
+                    onClick={() => {
+                      setActiveModuleIndex(index);
+                      if (modMaterials.length > 0) {
+                        setSelectedMaterial(modMaterials[0]);
+                      }
+                    }}
+                    className={`lms-module-nav-item ${isActive ? 'is-active' : ''} ${isModComplete ? 'is-completed' : ''}`}
+                  >
+                    <div className="lms-nav-item-top">
+                      <span className="lms-nav-item-index">MOD_{String(index + 1).padStart(2, '0')}</span>
+                      <span className={`lms-nav-item-status ${statusClass}`}>{statusLabel}</span>
                     </div>
 
-                    <div style={styles.materialsList}>
-                      {module.materials.map((material) => {
-                        const isCompleted = completedMaterials.includes(material._id);
-                        return (
-                          <div key={material._id} style={styles.materialRow(isCompleted)}>
-                            <label style={styles.checkboxLabel}>
-                              <input
-                                type="checkbox"
-                                style={styles.checkbox}
-                                checked={isCompleted}
-                                onChange={() => handleToggleMaterial(material._id)}
-                              />
-                              <div style={styles.materialIcon}>
-                                {getMaterialIcon(material.type)}
-                              </div>
-                              <div style={styles.materialDetails}>
-                                <a 
-                                  href={material.url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  style={styles.materialLink(isCompleted)}
-                                >
-                                  {material.title}
-                                  <ExternalLink size={12} style={styles.extIcon} />
-                                </a>
-                                <span style={styles.materialType}>{material.type.toUpperCase()}</span>
-                              </div>
-                            </label>
-                            {isCompleted && (
-                              <CheckCircle size={18} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                            )}
-                          </div>
-                        );
-                      })}
+                    <h4 className="lms-nav-item-title">{mod.title}</h4>
+
+                    <div className="lms-nav-item-meter">
+                      <div className="lms-nav-item-bar">
+                        <div 
+                          className="lms-nav-item-bar-fill" 
+                          style={{ width: `${fillWidth}%` }}
+                        />
+                      </div>
+                      <span className="lms-nav-item-tally">
+                        {modCompleted}/{modMaterials.length}
+                      </span>
                     </div>
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* =================================================================
+             ZONE 2: CURRICULUM WORKBENCH (CENTER)
+             ================================================================= */}
+          <main className="lms-stage">
+            {/* Toolbar: Category Filters & Search */}
+            <div className="lms-stage-toolbar">
+              <div className="lms-filter-tabs">
+                {['all', 'video', 'pdf', 'doc'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`lms-filter-btn ${filterType === type ? 'is-active' : ''}`}
+                  >
+                    {type.toUpperCase()}
+                  </button>
                 ))}
               </div>
+
+              <div className="lms-search-box">
+                <Search size={13} style={{ color: '#64748b' }} />
+                <input 
+                  type="text" 
+                  className="lms-search-input" 
+                  placeholder="FILTER ASSETS..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* Right: Progress Stat Panel */}
-            <div style={styles.statsSection}>
-              <div className="glass-card" style={styles.statsCard}>
-                <h3 style={styles.statsCardTitle}>Your Progress</h3>
-                
-                <div style={styles.percentageDisplay}>
-                  <span style={styles.percentageVal}>{percentage}%</span>
-                  <span style={styles.percentageLabel}>Complete</span>
+            {/* Active Module Briefing Header */}
+            {currentModule && (
+              <div className="lms-module-briefing">
+                <div className="lms-briefing-meta">
+                  <span className="lms-briefing-code">
+                    MODULE_{String(activeModuleIndex + 1).padStart(2, '0')}
+                  </span>
+                  <span className="lms-briefing-unit">
+                    UNIT // {user.unit?.toUpperCase()} // SYLLABUS_V1
+                  </span>
                 </div>
+                <h2 className="lms-briefing-title">{currentModule.title}</h2>
+                {currentModule.description && (
+                  <p className="lms-briefing-desc">{currentModule.description}</p>
+                )}
+              </div>
+            )}
 
-                <div style={styles.barWrapper}>
-                  <div className="progress-bar-container">
-                    <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+            {/* Hairline Resource Deck */}
+            <div className="lms-materials-deck">
+              {displayedMaterials.length === 0 ? (
+                <div style={{ padding: '60px 28px', textAlign: 'center', color: '#64748b', fontFamily: 'ui-monospace, monospace', fontSize: '0.75rem' }}>
+                  NO LEARNING ASSETS MATCH SPECIFIED FILTER CRITERIA
+                </div>
+              ) : (
+                displayedMaterials.map((mat, idx) => {
+                  const isDone = completedMaterials.includes(mat._id);
+                  const isSelected = selectedMaterial?._id === mat._id;
+
+                  return (
+                    <div 
+                      key={mat._id} 
+                      className={`lms-material-row ${isDone ? 'is-completed' : ''} ${isSelected ? 'is-selected' : ''}`}
+                      onClick={() => setSelectedMaterial(mat)}
+                    >
+                      {/* Index Monospace Tag */}
+                      <span className="lms-mat-index">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+
+                      {/* Technical Type Badge */}
+                      <div>
+                        <span className={`lms-mat-badge ${mat.type}`}>
+                          {mat.type === 'link' ? 'REPO' : mat.type}
+                        </span>
+                      </div>
+
+                      {/* Resource Description & Subtext */}
+                      <div className="lms-mat-info">
+                        <span className="lms-mat-title">{mat.title}</span>
+                        <div className="lms-mat-sub">
+                          <span>SOURCE: {mat.url.replace(/^https?:\/\//, '').split('/')[0]}</span>
+                          {isDone && <span style={{ color: '#34d399' }}>// VERIFIED</span>}
+                        </div>
+                      </div>
+
+                      {/* Action Triggers */}
+                      <div className="lms-mat-actions">
+                        <a 
+                          href={mat.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="lms-btn-icon-trigger"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Open external resource"
+                        >
+                          LAUNCH
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+
+                      {/* Verification Checkbox */}
+                      <div className="lms-verify-control">
+                        <div 
+                          className={`lms-checkbox-custom ${isDone ? 'checked' : ''}`}
+                          onClick={(e) => handleToggleMaterial(mat._id, e)}
+                          title={isDone ? 'Mark as pending' : 'Verify completion'}
+                        >
+                          {isDone && <Check size={14} strokeWidth={3} />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </main>
+
+          {/* =================================================================
+             ZONE 3: PERFORMANCE & CLEARANCE DECK (RIGHT)
+             ================================================================= */}
+          <aside className="lms-telemetry-deck">
+            {/* Bento 1: Progress Vector */}
+            <div className="lms-bento-panel">
+              <div className="lms-panel-label">
+                <span>Progress Vector (50/50 Weighted)</span>
+                <span style={{ color: '#006633' }}>● LIVE</span>
+              </div>
+
+              <div className="lms-progress-figure">
+                <span className="lms-big-percent">{percentage}%</span>
+                <span className="lms-percent-label">WEIGHTED OVERALL</span>
+              </div>
+
+              {/* 20-Tick Segmented Mechanical Meter */}
+              <div className="lms-mechanical-meter" title={`${percentage}% Completed`}>
+                {Array.from({ length: 20 }).map((_, i) => {
+                  const tickThreshold = (i + 1) * 5;
+                  const isFilled = percentage >= tickThreshold;
+                  return (
+                    <div 
+                      key={i} 
+                      className={`lms-meter-tick ${isFilled ? 'filled' : ''}`} 
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Tally Numbers */}
+              <div className="lms-tally-grid">
+                <div className="lms-tally-box">
+                  <div className="lms-tally-title">VERIFIED</div>
+                  <div className="lms-tally-val" style={{ color: '#34d399' }}>
+                    {completedCount} <span style={{ fontSize: '0.75rem', color: '#64748b' }}>ASSETS</span>
                   </div>
                 </div>
 
-                <div style={styles.statsBreakdown}>
-                  <div style={styles.breakdownItem}>
-                    <span style={styles.breakdownLabel}>Completed Items</span>
-                    <span style={styles.breakdownValue}>{completedCount} of {totalMaterials}</span>
+                <div className="lms-tally-box">
+                  <div className="lms-tally-title">REMAINING</div>
+                  <div className="lms-tally-val" style={{ color: '#fbbf24' }}>
+                    {remainingCount} <span style={{ fontSize: '0.75rem', color: '#64748b' }}>ASSETS</span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </main>
+
+            {/* Bento 2: Clearance & Certification Readiness */}
+            <div className="lms-bento-panel">
+              <div className="lms-panel-label">
+                <span>Internship Clearance</span>
+                <ShieldCheck size={14} style={{ color: isClearanceReady ? '#34d399' : '#d99b00' }} />
+              </div>
+
+              <div className="lms-clearance-box">
+                <div className={`lms-clearance-status ${isClearanceReady ? 'approved' : 'pending'}`}>
+                  <div className="lms-clearance-icon">
+                    {isClearanceReady ? (
+                      <ShieldCheck size={20} style={{ color: '#34d399' }} />
+                    ) : (
+                      <Clock size={20} style={{ color: '#fbbf24' }} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="lms-clearance-headline">
+                      {isClearanceReady ? 'ELIGIBLE FOR SIGN-OFF' : 'VERIFICATION IN PROGRESS'}
+                    </div>
+                    <div className="lms-clearance-note">
+                      {isClearanceReady 
+                        ? 'All track modules completed. Ready for supervisor evaluation.' 
+                        : `${remainingCount} requirement(s) pending verification before clearance.`
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                {/* Monospace Criteria Checklist */}
+                <div className="lms-checklist">
+                  <div className="lms-check-item">
+                    <span>UNIT SYLLABUS COMPLETION</span>
+                    <span className={percentage >= 100 ? 'state-ok' : 'state-wait'}>
+                      {percentage >= 100 ? '[SATISFIED]' : `[${percentage}%]`}
+                    </span>
+                  </div>
+                  <div className="lms-check-item">
+                    <span>MINIMUM THRESHOLD (80%)</span>
+                    <span className={percentage >= 80 ? 'state-ok' : 'state-wait'}>
+                      {percentage >= 80 ? '[MET]' : '[UNMET]'}
+                    </span>
+                  </div>
+                  <div className="lms-check-item">
+                    <span>MIST EVALUATION QUEUE</span>
+                    <span className={isClearanceReady ? 'state-ok' : 'state-wait'}>
+                      {isClearanceReady ? '[QUEUED]' : '[PENDING]'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bento 3: Quick Inspector */}
+            <div className="lms-bento-panel" style={{ flex: 1 }}>
+              <div className="lms-panel-label">
+                <span>Selected Resource</span>
+                <Compass size={14} style={{ color: '#38bdf8' }} />
+              </div>
+
+              {selectedMaterial ? (
+                <div className="lms-inspector-box">
+                  <div className="lms-inspector-target">
+                    {selectedMaterial.title}
+                  </div>
+
+                  <div>
+                    <div className="lms-inspector-meta-row">
+                      <span className="lms-inspector-k">FORMAT</span>
+                      <span className="lms-inspector-v">{selectedMaterial.type?.toUpperCase()}</span>
+                    </div>
+                    <div className="lms-inspector-meta-row">
+                      <span className="lms-inspector-k">STATUS</span>
+                      <span className="lms-inspector-v" style={{ color: completedMaterials.includes(selectedMaterial._id) ? '#34d399' : '#fbbf24' }}>
+                        {completedMaterials.includes(selectedMaterial._id) ? 'VERIFIED' : 'PENDING'}
+                      </span>
+                    </div>
+                    <div className="lms-inspector-meta-row">
+                      <span className="lms-inspector-k">HOST</span>
+                      <span className="lms-inspector-v">
+                        {selectedMaterial.url?.replace(/^https?:\/\//, '').split('/')[0]}
+                      </span>
+                    </div>
+                  </div>
+
+                  <a 
+                    href={selectedMaterial.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="lms-inspector-btn"
+                  >
+                    LAUNCH MATERIAL ↗
+                  </a>
+                </div>
+              ) : (
+                <div style={{ color: '#64748b', fontSize: '0.75rem', fontFamily: 'ui-monospace, monospace' }}>
+                  SELECT AN ASSET TO VIEW TELEMETRY & SPEC
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 };
-
-const styles = {
-  loaderContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    backgroundColor: 'var(--bg-primary)',
-  },
-  container: {
-    minHeight: '100vh',
-    backgroundColor: 'var(--bg-primary)',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  header: {
-    height: '72px',
-    backgroundColor: 'var(--bg-secondary)',
-    borderBottom: '1px solid var(--border-color)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 24px',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-  },
-  brand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  logoBadge: {
-    backgroundColor: 'var(--color-primary-light)',
-    color: 'var(--color-primary)',
-    fontWeight: '800',
-    fontSize: '0.85rem',
-    padding: '4px 10px',
-    borderRadius: '6px',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
-  },
-  headerTitle: {
-    fontSize: '1.15rem',
-    fontWeight: '700',
-    color: '#ffffff',
-    fontFamily: 'var(--font-display)',
-  },
-  headerSubtitle: {
-    fontSize: '0.75rem',
-    color: 'var(--text-secondary)',
-    fontWeight: '500',
-  },
-  userSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-  },
-  userInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    textAlign: 'right',
-  },
-  userName: {
-    fontSize: '0.875rem',
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  userEmail: {
-    fontSize: '0.75rem',
-    color: 'var(--text-muted)',
-  },
-  logoutBtn: {
-    height: '36px',
-  },
-  mainContent: {
-    flex: 1,
-    padding: '24px',
-    maxWidth: '1200px',
-    width: '100%',
-    margin: '0 auto',
-  },
-  layoutGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr',
-    gap: '24px',
-    alignItems: 'start',
-  },
-  sectionTitle: {
-    fontSize: '1.25rem',
-    fontFamily: 'var(--font-display)',
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  modulesContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-  },
-  moduleCard: {
-    padding: '20px',
-    border: '1px solid rgba(255, 255, 255, 0.04)',
-  },
-  moduleHeader: {
-    borderBottom: '1px solid var(--border-color)',
-    paddingBottom: '16px',
-    marginBottom: '16px',
-  },
-  moduleNumber: {
-    fontSize: '0.75rem',
-    fontWeight: '600',
-    color: 'var(--color-primary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  moduleTitle: {
-    fontSize: '1.15rem',
-    fontWeight: '700',
-    color: '#ffffff',
-    marginTop: '4px',
-  },
-  moduleDesc: {
-    fontSize: '0.875rem',
-    color: 'var(--text-secondary)',
-    marginTop: '6px',
-  },
-  materialsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  materialRow: (isCompleted) => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px 16px',
-    backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.02)' : 'var(--bg-secondary)',
-    border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.15)' : 'var(--border-color)'}`,
-    borderRadius: 'var(--radius-md)',
-    transition: 'all var(--transition-fast)',
-  }),
-  checkboxLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
-    flex: 1,
-    cursor: 'pointer',
-  },
-  checkbox: {
-    width: '18px',
-    height: '18px',
-    borderRadius: '4px',
-    border: '1px solid var(--border-color)',
-    cursor: 'pointer',
-    accentColor: 'var(--color-success)',
-  },
-  materialIcon: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  materialDetails: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-  },
-  materialLink: (isCompleted) => ({
-    fontSize: '0.9375rem',
-    fontWeight: '500',
-    color: isCompleted ? 'var(--text-secondary)' : '#ffffff',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    textDecoration: isCompleted ? 'line-through' : 'none',
-  }),
-  extIcon: {
-    opacity: 0.5,
-  },
-  materialType: {
-    fontSize: '0.7rem',
-    color: 'var(--text-muted)',
-    fontWeight: '600',
-    letterSpacing: '0.5px',
-  },
-  statsCard: {
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    padding: '24px',
-    position: 'sticky',
-    top: '96px',
-  },
-  statsCardTitle: {
-    fontSize: '1.1rem',
-    fontWeight: '700',
-    color: '#ffffff',
-    fontFamily: 'var(--font-display)',
-    marginBottom: '20px',
-  },
-  percentageDisplay: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    margin: '20px 0',
-  },
-  percentageVal: {
-    fontSize: '3.5rem',
-    fontWeight: '800',
-    color: 'var(--color-success)',
-    fontFamily: 'var(--font-display)',
-    lineHeight: 1,
-  },
-  percentageLabel: {
-    fontSize: '0.8125rem',
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    marginTop: '6px',
-  },
-  barWrapper: {
-    margin: '20px 0',
-  },
-  statsBreakdown: {
-    borderTop: '1px solid var(--border-color)',
-    paddingTop: '16px',
-    marginTop: '16px',
-  },
-  breakdownItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.85rem',
-  },
-  breakdownLabel: {
-    color: 'var(--text-secondary)',
-  },
-  breakdownValue: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  errorCard: {
-    textAlign: 'center',
-    padding: '48px 32px',
-    maxWidth: '560px',
-    margin: '40px auto 0',
-    border: '1px solid rgba(239, 68, 68, 0.1)',
-  }
-};
-
-const styleTag = document.createElement('style');
-styleTag.textContent = `
-  @media (min-width: 900px) {
-    .student-dashboard-layout {
-      display: grid;
-      grid-template-columns: 1fr 340px !important;
-      gap: 24px;
-    }
-  }
-`;
-document.head.appendChild(styleTag);
 
 export default StudentDashboard;

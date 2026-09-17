@@ -5,6 +5,16 @@ const Curriculum = require('../model/Curriculum');
 
 const seedData = async () => {
   try {
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.SEED_ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD || process.env.SEED_ADMIN_PASSWORD;
+    const adminName = process.env.ADMIN_NAME || process.env.SEED_ADMIN_NAME || 'MIST Portal Administrator';
+
+    if (!adminEmail || !adminPassword) {
+      console.error('Seeding aborted: Missing ADMIN_EMAIL or ADMIN_PASSWORD.');
+      console.error('Please add ADMIN_EMAIL and ADMIN_PASSWORD to your .env file before running seed.');
+      process.exit(1);
+    }
+
     const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mist_lms';
     await mongoose.connect(mongoURI);
     console.log('MongoDB connected for seeding.');
@@ -19,22 +29,21 @@ const seedData = async () => {
     // Delete legacy admin if exists
     await User.deleteOne({ email: 'admin@mist.gov.ng' });
 
-    const adminEmail = 'mistsupervisor@gmail.com';
-    const adminPassword = 'supervisor1234';
     let admin = await User.findOne({ email: adminEmail });
     if (!admin) {
       admin = await User.create({
-        name: 'MIST Portal Administrator',
+        name: adminName,
         email: adminEmail,
         password: adminPassword,
         role: 'admin',
         unit: 'Administration'
       });
-      console.log(`Created default admin: ${adminEmail} / ${adminPassword}`);
+      console.log(`Created default admin account for: ${adminEmail}`);
     } else {
       admin.password = adminPassword;
+      if (adminName) admin.name = adminName;
       await admin.save();
-      console.log(`Updated admin password for ${adminEmail} to ${adminPassword}`);
+      console.log(`Updated admin credentials for: ${adminEmail}`);
     }
 
     console.log('Seeding completed successfully!');

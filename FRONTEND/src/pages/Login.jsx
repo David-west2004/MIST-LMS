@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { LogIn, Key, Mail, AlertCircle } from 'lucide-react';
+import mistLogo from '../assets/MIST.webp';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -36,7 +37,11 @@ const Login = () => {
     <div style={styles.container}>
       <div className="glass-card animate-slide-in" style={styles.card}>
         <div style={styles.header}>
-          <div style={styles.logoBadge}>MIST</div>
+          <img 
+            src={mistLogo} 
+            alt="Lagos State Ministry of Innovation, Science and Technology" 
+            style={{ height: '76px', width: 'auto', margin: '0 auto 16px', display: 'block', objectFit: 'contain' }} 
+          />
           <h1 style={styles.title}>Student IT Portal</h1>
           <p style={styles.subtitle}>Lagos State Ministry of Innovation, Science and Technology</p>
         </div>
@@ -108,41 +113,32 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: 'radial-gradient(circle at top, #111827 0%, #0b0f19 100%)',
+    backgroundColor: '#F7FAFC',
     padding: '20px',
   },
   card: {
     width: '100%',
     maxWidth: '420px',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
+    padding: '36px',
   },
   header: {
     textAlign: 'center',
-    marginBottom: '32px',
-  },
-  logoBadge: {
-    display: 'inline-block',
-    backgroundColor: 'var(--color-primary-light)',
-    color: 'var(--color-primary)',
-    fontWeight: '700',
-    padding: '4px 12px',
-    borderRadius: '8px',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    marginBottom: '16px',
-    border: '1px solid rgba(99, 102, 241, 0.3)',
+    marginBottom: '28px',
   },
   title: {
     fontFamily: 'var(--font-display)',
     fontSize: '1.75rem',
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#1A365D',
     marginBottom: '8px',
   },
   subtitle: {
     fontSize: '0.875rem',
-    color: 'var(--text-secondary)',
+    color: '#4A5568',
     lineHeight: '1.4',
   },
   inputContainer: {
@@ -173,7 +169,7 @@ const styles = {
     borderRadius: 'var(--radius-md)',
     marginBottom: '24px',
     fontSize: '0.875rem',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    border: '1px solid var(--color-danger-border)',
   }
 };
 
