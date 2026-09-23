@@ -48,7 +48,17 @@ const login = async (req, res) => {
 
 const registerNewStudent = async (req, res) => {
   try {
-    const { name, email, unit } = req.body;
+    const { 
+      name, 
+      email, 
+      unit, 
+      siwesDuration = '6_months', 
+      siwesStartDate, 
+      institution, 
+      matricNumber, 
+      phoneNumber 
+    } = req.body;
+
     if (!name || !email || !unit) {
       return res.status(400).json({ message: 'Please provide name, email, and unit' });
     }
@@ -58,6 +68,22 @@ const registerNewStudent = async (req, res) => {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
+    const validDurations = {
+      '3_months': 12,
+      '6_months': 24,
+      '1_year': 52
+    };
+
+    const durationKey = validDurations[siwesDuration] ? siwesDuration : '6_months';
+    const siwesDurationWeeks = validDurations[durationKey];
+
+    const startDate = siwesStartDate ? new Date(siwesStartDate) : new Date();
+    if (isNaN(startDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid siwesStartDate provided' });
+    }
+
+    const siwesEndDate = new Date(startDate.getTime() + (siwesDurationWeeks * 7 * 24 * 60 * 60 * 1000));
+
     const inviteToken = crypto.randomBytes(32).toString('hex');
     const tokenExpires = Date.now() + 48 * 60 * 60 * 1000; // 48 hours
 
@@ -66,6 +92,14 @@ const registerNewStudent = async (req, res) => {
       email,
       role: 'student',
       unit,
+      siwesDuration: durationKey,
+      siwesDurationWeeks,
+      siwesStartDate: startDate,
+      siwesEndDate,
+      institution: institution ? institution.trim() : undefined,
+      matricNumber: matricNumber ? matricNumber.trim() : undefined,
+      phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
+      isClearedForCompletion: false,
       inviteToken,
       tokenExpires
     });
@@ -77,6 +111,9 @@ const registerNewStudent = async (req, res) => {
     console.log(`INVITATION LOGGED FOR DEVELOPMENT:`);
     console.log(`Student: ${name} (${email})`);
     console.log(`Unit: ${unit}`);
+    console.log(`SIWES Duration: ${durationKey} (${siwesDurationWeeks} weeks)`);
+    console.log(`Start Date: ${startDate.toISOString().split('T')[0]}`);
+    console.log(`End Date: ${siwesEndDate.toISOString().split('T')[0]}`);
     console.log(`Invite Link: ${inviteLink}`);
     console.log('==================================================\n');
 
@@ -104,7 +141,18 @@ const registerNewStudent = async (req, res) => {
           from: process.env.SMTP_FROM || '"MIST Student Portal" <no-reply@mist.gov.ng>',
           to: email,
           subject: 'Official Invitation // MIST Student IT Portal',
-          html: generateInviteEmailHtml({ name, email, unit, inviteLink }),
+          html: generateInviteEmailHtml({ 
+            name, 
+            email, 
+            unit, 
+            inviteLink,
+            siwesDuration: durationKey,
+            siwesDurationWeeks,
+            siwesStartDate: startDate,
+            siwesEndDate,
+            institution,
+            matricNumber
+          }),
           attachments
         });
         console.log(`Official branded invite email dispatched successfully to ${email}`);
@@ -118,7 +166,20 @@ const registerNewStudent = async (req, res) => {
       message: 'Student invited successfully.',
       data: {
         inviteToken,
-        inviteLink
+        inviteLink,
+        student: {
+          id: newStudent._id,
+          name: newStudent.name,
+          email: newStudent.email,
+          unit: newStudent.unit,
+          siwesDuration: newStudent.siwesDuration,
+          siwesDurationWeeks: newStudent.siwesDurationWeeks,
+          siwesStartDate: newStudent.siwesStartDate,
+          siwesEndDate: newStudent.siwesEndDate,
+          institution: newStudent.institution,
+          matricNumber: newStudent.matricNumber,
+          phoneNumber: newStudent.phoneNumber
+        }
       }
     });
   } catch (error) {
@@ -144,7 +205,14 @@ const verifyInviteToken = async (req, res) => {
       data: {
         name: user.name,
         email: user.email,
-        unit: user.unit
+        unit: user.unit,
+        siwesDuration: user.siwesDuration,
+        siwesDurationWeeks: user.siwesDurationWeeks,
+        siwesStartDate: user.siwesStartDate,
+        siwesEndDate: user.siwesEndDate,
+        institution: user.institution,
+        matricNumber: user.matricNumber,
+        phoneNumber: user.phoneNumber
       }
     });
   } catch (error) {
@@ -208,7 +276,15 @@ const completeRegistration = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
-          unit: user.unit
+          unit: user.unit,
+          siwesDuration: user.siwesDuration,
+          siwesDurationWeeks: user.siwesDurationWeeks,
+          siwesStartDate: user.siwesStartDate,
+          siwesEndDate: user.siwesEndDate,
+          institution: user.institution,
+          matricNumber: user.matricNumber,
+          phoneNumber: user.phoneNumber,
+          isClearedForCompletion: user.isClearedForCompletion
         }
       }
     });

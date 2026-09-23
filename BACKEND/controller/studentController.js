@@ -1,5 +1,6 @@
 const User = require('../model/User');
 const { calculatePercentage } = require('./progressController');
+const { checkClearanceEligibility } = require('./attendanceController');
 
 const getAllStudents = async (req, res) => {
   try {
@@ -7,9 +8,16 @@ const getAllStudents = async (req, res) => {
 
     const enhancedStudents = await Promise.all(students.map(async (student) => {
       const percentage = await calculatePercentage(student._id, student.unit);
+      let clearanceEligibility = null;
+      try {
+        clearanceEligibility = await checkClearanceEligibility(student._id);
+      } catch (err) {
+        // Silently skip if error
+      }
       return {
         ...student.toObject(),
-        progressPercentage: percentage
+        progressPercentage: percentage,
+        clearanceEligibility
       };
     }));
 

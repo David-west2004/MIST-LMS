@@ -116,7 +116,7 @@ const StudentAssignments = () => {
               <span style={styles.statLabel}>SUBMITTED</span>
             </div>
             <div style={styles.statBox}>
-              <span style={{ ...styles.statNum, color: pendingCount > 0 ? '#D69E2E' : '#006633' }}>
+              <span style={{ ...styles.statNum, color: pendingCount > 0 ? '#D97706' : '#008751' }}>
                 {pendingCount}
               </span>
               <span style={styles.statLabel}>PENDING</span>
@@ -131,10 +131,10 @@ const StudentAssignments = () => {
               alignItems: 'center',
               gap: '6px',
               padding: '6px 12px',
-              backgroundColor: '#141c2e',
-              border: '1px solid #25334c',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
               borderRadius: '4px',
-              color: '#cbd5e1',
+              color: '#FFFFFF',
               fontSize: '0.75rem',
               fontWeight: '500',
               cursor: 'pointer'
@@ -467,25 +467,25 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    backgroundColor: 'rgba(0, 102, 51, 0.1)',
-    color: '#006633',
+    backgroundColor: 'rgba(0, 135, 81, 0.1)',
+    color: '#008751',
     padding: '4px 10px',
     borderRadius: '12px',
     fontSize: '0.75rem',
     fontWeight: '600',
-    border: '1px solid rgba(0, 102, 51, 0.25)',
+    border: '1px solid rgba(0, 135, 81, 0.25)',
   },
   statusBadgePending: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    backgroundColor: 'rgba(214, 158, 46, 0.1)',
-    color: '#D69E2E',
+    backgroundColor: 'rgba(217, 119, 6, 0.1)',
+    color: '#D97706',
     padding: '4px 10px',
     borderRadius: '12px',
     fontSize: '0.75rem',
     fontWeight: '600',
-    border: '1px solid rgba(214, 158, 46, 0.25)',
+    border: '1px solid rgba(217, 119, 6, 0.25)',
   },
   statusBadgeOverdue: {
     display: 'inline-flex',

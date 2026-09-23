@@ -55,10 +55,15 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ email, password })
   }),
-  inviteStudent: (name, email, unit) => request('/auth/invite', {
-    method: 'POST',
-    body: JSON.stringify({ name, email, unit })
-  }),
+  inviteStudent: (dataOrName, email, unit) => {
+    const payload = typeof dataOrName === 'object' && dataOrName !== null
+      ? dataOrName
+      : { name: dataOrName, email, unit };
+    return request('/admin/invite', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
   verifyInviteToken: (token) => request(`/auth/verify-invite/${token}`),
   completeRegistration: (token, password) => request('/auth/register-invited', {
     method: 'POST',
@@ -128,7 +133,20 @@ export const api = {
   updateStudentUnit: (id, unit) => request(`/students/${id}/unit`, {
     method: 'PATCH',
     body: JSON.stringify({ unit })
-  })
+  }),
+
+  // Geofenced Attendance
+  checkInAttendance: (latitude, longitude) => request('/attendance/check-in', {
+    method: 'POST',
+    body: JSON.stringify({ latitude, longitude })
+  }),
+  getMyAttendanceSummary: () => request('/attendance/my-summary'),
+
+  // Completion Clearance & Certification
+  requestCompletionLetter: () => request('/clearance/request-letter', {
+    method: 'POST'
+  }),
+  getClearanceStatus: () => request('/clearance/status')
 };
 
 export { APIError };

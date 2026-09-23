@@ -6,9 +6,42 @@
  * @param {string} params.email - Intern's email address
  * @param {string} params.unit - Assigned department/unit track
  * @param {string} params.inviteLink - Unique registration URL
+ * @param {string} [params.siwesDuration] - '3_months', '6_months', or '1_year'
+ * @param {number} [params.siwesDurationWeeks] - 12, 24, or 52
+ * @param {Date|string} [params.siwesStartDate] - Start date
+ * @param {Date|string} [params.siwesEndDate] - End date
+ * @param {string} [params.institution] - Tertiary institution
+ * @param {string} [params.matricNumber] - Student matriculation number
  * @returns {string} Fully styled HTML email document
  */
-const generateInviteEmailHtml = ({ name, unit, inviteLink }) => {
+const generateInviteEmailHtml = ({ 
+  name, 
+  email, 
+  unit, 
+  inviteLink,
+  siwesDuration,
+  siwesDurationWeeks,
+  siwesStartDate,
+  siwesEndDate,
+  institution,
+  matricNumber 
+}) => {
+  const durationLabel = siwesDuration === '3_months' 
+    ? '3 Months (12 Weeks)' 
+    : siwesDuration === '1_year' 
+      ? '1 Year (52 Weeks)' 
+      : '6 Months (24 Weeks)';
+
+  const formatD = (d) => {
+    if (!d) return 'To be confirmed';
+    const dateObj = new Date(d);
+    return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const datesText = siwesStartDate && siwesEndDate 
+    ? `${formatD(siwesStartDate)} to ${formatD(siwesEndDate)}`
+    : null;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,7 +63,7 @@ const generateInviteEmailHtml = ({ name, unit, inviteLink }) => {
           
           <!-- Top Civic Header Bar -->
           <tr>
-            <td style="background: linear-gradient(135deg, #1A365D 0%, #132742 100%); padding: 32px 24px; text-align: center; border-bottom: 4px solid #006633;">
+            <td style="background: linear-gradient(135deg, #1A365D 0%, #132742 100%); padding: 32px 24px; text-align: center; border-bottom: 4px solid #008751;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td align="center">
@@ -47,7 +80,7 @@ const generateInviteEmailHtml = ({ name, unit, inviteLink }) => {
           <tr>
             <td style="padding: 40px 36px; background-color: #FFFFFF; background-image: url('cid:mistLogo'); background-repeat: no-repeat; background-position: center center; background-size: 260px auto; position: relative;">
               <!-- Overlay to guarantee maximum text readability -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: rgba(255, 255, 255, 0.94); border-radius: 8px; padding: 12px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: rgba(255, 255, 255, 0.96); border-radius: 8px; padding: 16px;">
                 <tr>
                   <td>
                     <p style="color: #1A365D; font-size: 16px; font-weight: 700; margin: 0 0 16px 0;">
@@ -55,21 +88,47 @@ const generateInviteEmailHtml = ({ name, unit, inviteLink }) => {
                     </p>
 
                     <p style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
-                      You have been officially invited to join the <strong>Lagos State Ministry of Innovation, Science and Technology (MIST) Student IT Portal</strong> as an active intern for your designated service unit.
+                      You have been officially invited to join the <strong>Lagos State Ministry of Innovation, Science and Technology (MIST) Student IT Portal</strong> as an active intern.
                     </p>
 
-                    <!-- Assigned Unit Highlight Box -->
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F7FAFC; border-left: 4px solid #006633; border-radius: 4px; padding: 14px 18px; margin: 0 0 24px 0; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;">
+                    <!-- Assigned Unit & SIWES Highlight Box -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #F8FAFC; border-left: 4px solid #008751; border-radius: 6px; padding: 16px 20px; margin: 0 0 24px 0; border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;">
                       <tr>
                         <td>
-                          <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; letter-spacing: 0.5px;">Assigned Department / Unit</span>
-                          <strong style="display: block; font-size: 16px; color: #1A365D; margin-top: 4px;">${unit}</strong>
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td style="padding-bottom: 10px;">
+                                <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; letter-spacing: 0.5px;">Assigned Department / Unit</span>
+                                <strong style="display: block; font-size: 16px; color: #1A365D; margin-top: 2px;">${unit}</strong>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="padding-bottom: 10px;">
+                                <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; letter-spacing: 0.5px;">SIWES Attachment Duration</span>
+                                <strong style="display: block; font-size: 14px; color: #1A365D; margin-top: 2px;">${durationLabel}</strong>
+                              </td>
+                            </tr>
+                            ${datesText ? `
+                            <tr>
+                              <td style="padding-bottom: 10px;">
+                                <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; letter-spacing: 0.5px;">Tenure Period</span>
+                                <span style="display: block; font-size: 13px; color: #475569; margin-top: 2px;">${datesText}</span>
+                              </td>
+                            </tr>` : ''}
+                            ${institution ? `
+                            <tr>
+                              <td style="padding-bottom: 10px;">
+                                <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; letter-spacing: 0.5px;">Institution ${matricNumber ? '& Matric No.' : ''}</span>
+                                <span style="display: block; font-size: 13px; color: #475569; margin-top: 2px;">${institution}${matricNumber ? ` (${matricNumber})` : ''}</span>
+                              </td>
+                            </tr>` : ''}
+                          </table>
                         </td>
                       </tr>
                     </table>
 
                     <p style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0 0 28px 0;">
-                      Through this portal, you will access your curriculum modules, submit weekly coursework assignments, track your practical evaluation, and interact with your unit supervisors.
+                      Through this portal, you will access your curriculum syllabus, log mandatory geofenced daily attendance at Alausa Secretariat, submit weekly assignments, and obtain your official MIST SIWES Completion Certificate.
                     </p>
 
                     <!-- Primary Action CTA Button -->

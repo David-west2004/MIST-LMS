@@ -9,6 +9,10 @@ const curriculumRoutes = require('./routes/curriculumRoutes');
 const progressRoutes = require('./routes/progressRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const assignmentRoutes = require('./routes/assignmentRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
+const clearanceRoutes = require('./routes/clearanceRoutes');
+const { registerNewStudent } = require('./controller/authController');
+const { protect, restrictTo } = require('./middleware/auth');
 
 // Connect to database
 connectDB();
@@ -24,10 +28,13 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Mount routers
 app.use('/api/auth', authRoutes);
+app.post('/api/admin/invite', protect, restrictTo('admin'), registerNewStudent);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/clearance', clearanceRoutes);
 
 // Default API health status route
 app.get('/', (req, res) => {

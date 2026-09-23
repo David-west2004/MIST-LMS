@@ -106,93 +106,132 @@ const Students = () => {
         <table className="custom-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
+              <th>Intern Details</th>
               <th>Assigned Unit</th>
+              <th>SIWES Duration</th>
+              <th>Institution / Matric</th>
               <th>Overall Progress</th>
-              <th>Activity Status</th>
+              <th>Attendance Clearance</th>
               <th>Account</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {students.length > 0 ? (
-              students.map((student) => (
-                <tr key={student._id}>
-                  <td style={styles.boldText}>{student.name}</td>
-                  <td>{student.email}</td>
-                  <td>
-                    {/* Read-only static badge for locked unit */}
-                    <span style={styles.unitBadge}>
-                      {student.unit}
-                    </span>
-                  </td>
-                  <td style={{ width: '200px' }}>
-                    <div style={styles.progressColumn}>
-                      <span style={styles.progressText}>{student.progressPercentage}%</span>
-                      <div className="progress-bar-container">
-                        <div 
-                          className="progress-bar-fill" 
-                          style={{ 
-                            width: `${student.progressPercentage}%`,
-                            backgroundColor: '#006633' 
-                          }} 
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    {/* Real-Time Activity Monitoring */}
-                    {isRecentlyActive(student.lastActive) ? (
-                      <div style={styles.activityContainer}>
-                        <span style={styles.pulseContainer}>
-                          <span style={styles.pulsePing} />
-                          <span style={styles.pulseDot} />
-                        </span>
-                        <span style={styles.activeText}>Active now</span>
-                      </div>
-                    ) : (
-                      <span style={styles.inactiveText}>
-                        {formatRelativeActivity(student.lastActive)}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {student.isBlocked ? (
-                      <span className="badge badge-danger">
-                        Blocked
-                      </span>
-                    ) : (
-                      <span className="badge badge-success">
-                        Active
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleBlock(student._id, student.isBlocked)}
-                      className={`btn btn-sm ${student.isBlocked ? 'btn-secondary' : 'btn-danger'}`}
-                      style={styles.actionBtn}
-                    >
-                      {student.isBlocked ? (
-                        <>
-                          <ShieldCheck size={14} />
-                          Unblock
-                        </>
-                      ) : (
-                        <>
-                          <ShieldAlert size={14} />
-                          Block Access
-                        </>
+              students.map((student) => {
+                const durationLabel = student.siwesDuration === '3_months' 
+                  ? '3 Months (12 Wks)' 
+                  : student.siwesDuration === '1_year' 
+                    ? '1 Year (52 Wks)' 
+                    : '6 Months (24 Wks)';
+
+                const compliantWeeks = student.clearanceEligibility?.compliantWeeks || 0;
+                const targetWeeks = student.siwesDurationWeeks || 24;
+
+                return (
+                  <tr key={student._id}>
+                    <td>
+                      <div style={styles.boldText}>{student.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#718096' }}>{student.email}</div>
+                      {student.phoneNumber && (
+                        <div style={{ fontSize: '0.75rem', color: '#718096' }}>{student.phoneNumber}</div>
                       )}
-                    </button>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td>
+                      {/* Read-only static badge for locked unit */}
+                      <span style={styles.unitBadge}>
+                        {student.unit}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ 
+                        fontSize: '0.8125rem', 
+                        fontWeight: '600',
+                        color: '#1A365D',
+                        backgroundColor: '#EDF2F7',
+                        padding: '3px 8px',
+                        borderRadius: '4px'
+                      }}>
+                        {durationLabel}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.8125rem', color: '#2D3748', fontWeight: '500' }}>
+                        {student.institution || '—'}
+                      </div>
+                      {student.matricNumber && (
+                        <div style={{ fontSize: '0.75rem', color: '#718096', fontFamily: 'monospace' }}>
+                          ID: {student.matricNumber}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ width: '160px' }}>
+                      <div style={styles.progressColumn}>
+                        <span style={styles.progressText}>{student.progressPercentage}%</span>
+                        <div className="progress-bar-container">
+                          <div 
+                            className="progress-bar-fill" 
+                            style={{ 
+                              width: `${student.progressPercentage}%`,
+                              backgroundColor: '#008751' 
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {student.isClearedForCompletion ? (
+                        <span className="badge badge-success" style={{ backgroundColor: '#DEF7EC', color: '#03543F' }}>
+                          Cleared ★
+                        </span>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem' }}>
+                          <span style={{ fontWeight: '600', color: compliantWeeks === targetWeeks ? '#008751' : '#D97706' }}>
+                            {compliantWeeks} / {targetWeeks} Wks
+                          </span>
+                          <div style={{ color: '#718096', fontSize: '0.6875rem' }}>
+                            {student.clearanceEligibility?.totalDays || 0} / {student.clearanceEligibility?.targetDays || targetWeeks * 3} Days
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {student.isBlocked ? (
+                        <span className="badge badge-danger">
+                          Blocked
+                        </span>
+                      ) : (
+                        <span className="badge badge-success">
+                          Active
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBlock(student._id, student.isBlocked)}
+                        className={`btn btn-sm ${student.isBlocked ? 'btn-secondary' : 'btn-danger'}`}
+                        style={styles.actionBtn}
+                      >
+                        {student.isBlocked ? (
+                          <>
+                            <ShieldCheck size={14} />
+                            Unblock
+                          </>
+                        ) : (
+                          <>
+                            <ShieldAlert size={14} />
+                            Block
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="7" style={styles.emptyRow}>No students registered. Send invites to get started.</td>
+                <td colSpan="8" style={styles.emptyRow}>No students registered. Send invites to get started.</td>
               </tr>
             )}
           </tbody>
