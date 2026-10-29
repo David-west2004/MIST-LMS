@@ -7,10 +7,14 @@ const {
   getMyCurriculum,
   updateCurriculum,
   deleteCurriculum,
-  uploadMaterial
+  uploadMaterial,
+  getDistinctUnits
 } = require('../controller/curriculumController');
 const { protect, restrictTo } = require('../middleware/auth');
 const upload = require('../middleware/uploadMiddleware');
+
+// Authenticated route to get distinct units/departments
+router.get('/units', protect, getDistinctUnits);
 
 // Student-accessible route to get their own unit's curriculum
 router.get('/my-unit', protect, getMyCurriculum);

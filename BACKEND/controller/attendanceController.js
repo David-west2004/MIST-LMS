@@ -1,6 +1,6 @@
 const Attendance = require('../model/Attendance');
 const User = require('../model/User');
-const { checkAlausaGeofence, DEFAULT_MAX_RADIUS_METERS } = require('../utils/geofence');
+// const { checkAlausaGeofence, DEFAULT_MAX_RADIUS_METERS } = require('../utils/geofence');
 
 /**
  * Normalizes a date to UTC midnight for consistent daily calendar comparison.
@@ -95,23 +95,23 @@ const checkIn = async (req, res) => {
       return res.status(403).json({ message: 'Access denied: Account suspended.' });
     }
 
-    const { latitude, longitude } = req.body;
-    if (latitude === undefined || longitude === undefined || typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return res.status(400).json({ 
-        message: 'Invalid request: GPS coordinates (numeric latitude and longitude) are required.' 
-      });
-    }
+    // const { latitude, longitude } = req.body;
+    // if (latitude === undefined || longitude === undefined || typeof latitude !== 'number' || typeof longitude !== 'number') {
+    //   return res.status(400).json({ 
+    //     message: 'Invalid request: GPS coordinates (numeric latitude and longitude) are required.' 
+    //   });
+    // }
 
-    // 1. Enforce Alausa Secretariat Geofence
-    const geo = checkAlausaGeofence(latitude, longitude, DEFAULT_MAX_RADIUS_METERS);
-    if (!geo.inside) {
-      return res.status(400).json({
-        status: 'fail',
-        message: `Check-in rejected: You are outside the Alausa Secretariat boundary. Distance: ${geo.distance}m (Maximum allowed: ${geo.maxRadius}m).`,
-        distance: geo.distance,
-        maxRadius: geo.maxRadius
-      });
-    }
+    // // 1. Enforce Alausa Secretariat Geofence
+    // const geo = checkAlausaGeofence(latitude, longitude, DEFAULT_MAX_RADIUS_METERS);
+    // if (!geo.inside) {
+    //   return res.status(400).json({
+    //     status: 'fail',
+    //     message: `Check-in rejected: You are outside the Alausa Secretariat boundary. Distance: ${geo.distance}m (Maximum allowed: ${geo.maxRadius}m).`,
+    //     distance: geo.distance,
+    //     maxRadius: geo.maxRadius
+    //   });
+    // }
 
     // 2. Validate SIWES Dates and Compute Current Week Number
     if (!student.siwesStartDate) {

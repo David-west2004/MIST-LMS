@@ -1,4 +1,5 @@
 const Curriculum = require('../model/Curriculum');
+const User = require('../model/User');
 
 const createCurriculum = async (req, res) => {
   try {
@@ -156,6 +157,31 @@ const uploadMaterial = async (req, res) => {
   }
 };
 
+const getDistinctUnits = async (req, res) => {
+  try {
+    const curriculumUnits = await Curriculum.distinct('unit');
+    const userUnits = await User.distinct('unit', { role: 'student' });
+    
+    const combined = [...(curriculumUnits || []), ...(userUnits || [])];
+    const cleanUnits = Array.from(
+      new Set(
+        combined
+          .map(u => (typeof u === 'string' ? u.trim() : ''))
+          .filter(u => u.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    return res.status(200).json({
+      status: 'success',
+      results: cleanUnits.length,
+      data: { units: cleanUnits }
+    });
+  } catch (error) {
+    console.error('Get distinct units error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   createCurriculum,
   getCurricula,
@@ -163,5 +189,6 @@ module.exports = {
   getMyCurriculum,
   updateCurriculum,
   deleteCurriculum,
-  uploadMaterial
+  uploadMaterial,
+  getDistinctUnits
 };

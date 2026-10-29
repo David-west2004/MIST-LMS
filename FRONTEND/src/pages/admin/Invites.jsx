@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
+import { useUnits } from '../../hooks/useUnits';
 import { Send, CheckCircle, Clipboard, AlertCircle, Calendar, Building, Hash, Phone, Clock } from 'lucide-react';
 
 const DURATION_OPTIONS = [
@@ -12,8 +13,14 @@ const Invites = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [unit, setUnit] = useState('');
-  const [units, setUnits] = useState([]);
-  const [loadingUnits, setLoadingUnits] = useState(true);
+  const { units, loading: loadingUnits, error: unitsError } = useUnits();
+
+  // Default unit when loaded
+  useEffect(() => {
+    if (!unit && units.length > 0) {
+      setUnit(units[0]);
+    }
+  }, [units, unit]);
 
   // SIWES Internship Metadata
   const [siwesDuration, setSiwesDuration] = useState('6_months');
@@ -41,24 +48,6 @@ const Invites = () => {
     const end = new Date(start.getTime() + (selectedDurationMeta.weeks * 7 * 24 * 60 * 60 * 1000));
     return end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }, [siwesStartDate, selectedDurationMeta]);
-
-  useEffect(() => {
-    const fetchUnits = async () => {
-      try {
-        const res = await api.getCurricula();
-        const dbUnits = res.data.curricula.map(c => c.unit);
-        setUnits(dbUnits);
-        if (dbUnits.length > 0) {
-          setUnit(dbUnits[0]);
-        }
-      } catch (err) {
-        setError('Failed to fetch departments/units. Please check backend connection.');
-      } finally {
-        setLoadingUnits(false);
-      }
-    };
-    fetchUnits();
-  }, []);
 
   const handleSendInvite = async (e) => {
     e.preventDefault();
@@ -170,7 +159,7 @@ const Invites = () => {
                 onChange={(e) => setUnit(e.target.value)}
                 required
               >
-                {units.map((u) => (
+                {(units || []).map((u) => (
                   <option key={u} value={u}>{u}</option>
                 ))}
               </select>
@@ -275,7 +264,7 @@ const Invites = () => {
             disabled={loading || units.length === 0}
           >
             <Send size={16} />
-            {loading ? 'Dispatching Invitation...' : 'Generate & Send Invitation'}
+            {loading ? 'Sending Invitation...' : 'Generate & Send Invitation'}
           </button>
         </form>
       </div>

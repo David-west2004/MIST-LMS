@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
+import { useUnits } from '../../hooks/useUnits';
 import { Plus, Trash2, Save, AlertTriangle, Upload, CheckCircle2 } from 'lucide-react';
 
 const Curriculum = () => {
-  const [units, setUnits] = useState([]);
+  const { units, loading: loadingUnits, refetchUnits } = useUnits();
   const [selectedUnit, setSelectedUnit] = useState('');
   const [curriculum, setCurriculum] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,25 +16,16 @@ const Curriculum = () => {
   const [newUnitName, setNewUnitName] = useState('');
   const [creatingUnit, setCreatingUnit] = useState(false);
 
-  const fetchUnits = async (selectName = null) => {
-    try {
-      const res = await api.getCurricula();
-      const dbUnits = res.data.curricula.map(c => c.unit);
-      setUnits(dbUnits);
-      
-      if (selectName) {
-        setSelectedUnit(selectName);
-      } else if (dbUnits.length > 0 && !selectedUnit) {
-        setSelectedUnit(dbUnits[0]);
-      } else if (dbUnits.length === 0) {
-        setSelectedUnit('');
-        setCurriculum(null);
-        setLoading(false);
-      }
-    } catch (err) {
-      alert(err.message || 'Error fetching units.');
+  // Set default selected unit when units load
+  useEffect(() => {
+    if (units.length > 0 && (!selectedUnit || !units.includes(selectedUnit))) {
+      setSelectedUnit(units[0]);
+    } else if (units.length === 0 && !loadingUnits) {
+      setSelectedUnit('');
+      setCurriculum(null);
+      setLoading(false);
     }
-  };
+  }, [units, selectedUnit, loadingUnits]);
 
   const fetchCurriculum = async (unitName) => {
     if (!unitName) {
@@ -57,10 +49,6 @@ const Curriculum = () => {
   };
 
   useEffect(() => {
-    fetchUnits();
-  }, []);
-
-  useEffect(() => {
     if (selectedUnit) {
       fetchCurriculum(selectedUnit);
     }
@@ -82,7 +70,8 @@ const Curriculum = () => {
       alert(`Unit "${trimmed}" added successfully.`);
       setNewUnitName('');
       setShowAddUnit(false);
-      await fetchUnits(trimmed);
+      await refetchUnits();
+      setSelectedUnit(trimmed);
     } catch (err) {
       alert(err.message || 'Failed to create unit.');
     } finally {
@@ -297,11 +286,9 @@ const Curriculum = () => {
     try {
       await api.deleteCurriculum(curriculum._id);
       alert('Curriculum deleted.');
-      const res = await api.getCurricula();
-      const dbUnits = res.data.curricula.map(c => c.unit);
-      setUnits(dbUnits);
-      if (dbUnits.length > 0) {
-        setSelectedUnit(dbUnits[0]);
+      const updatedUnits = await refetchUnits();
+      if (updatedUnits.length > 0) {
+        setSelectedUnit(updatedUnits[0]);
       } else {
         setSelectedUnit('');
         setCurriculum(null);

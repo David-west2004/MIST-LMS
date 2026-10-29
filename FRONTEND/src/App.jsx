@@ -9,6 +9,7 @@ import Curriculum from './pages/admin/Curriculum';
 import Invites from './pages/admin/Invites';
 import Assignments from './pages/admin/Assignments';
 import StudentDashboard from './pages/student/Dashboard';
+import StudentAttendancePage from './pages/student/StudentAttendancePage';
 import StudentAssignments from './pages/student/StudentAssignments';
 
 // Route Guard for authenticated users
@@ -63,6 +64,11 @@ function App() {
         <Route path="/student/curriculum" element={
           <PrivateRoute>
             <StudentDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/student/attendance" element={
+          <PrivateRoute>
+            <StudentAttendancePage />
           </PrivateRoute>
         } />
         <Route path="/student/assignments" element={

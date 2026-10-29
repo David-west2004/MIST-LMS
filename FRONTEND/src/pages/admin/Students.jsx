@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { ShieldAlert, ShieldCheck, AlertTriangle, RotateCw } from 'lucide-react';
+import { useUnits } from '../../hooks/useUnits';
+import { ShieldAlert, ShieldCheck, AlertTriangle, RotateCw, Filter } from 'lucide-react';
 import { isRecentlyActive, formatRelativeActivity } from '../../utils/timeAgo';
 
 const Students = () => {
   const [students, setStudents] = useState([]);
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState('ALL');
+  const { units } = useUnits();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +44,10 @@ const Students = () => {
       alert(err.message || 'Failed to update student state.');
     }
   };
+
+  const filteredStudents = selectedUnitFilter === 'ALL'
+    ? students
+    : students.filter(s => s.unit?.toLowerCase() === selectedUnitFilter.toLowerCase());
 
   if (loading) {
     return (
@@ -82,24 +89,50 @@ const Students = () => {
           </span>
         </div>
 
-        <button 
-          onClick={handleRefresh} 
-          disabled={refreshing}
-          type="button"
-          className="btn btn-secondary"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.8125rem',
-            padding: '6px 12px',
-            height: '32px'
-          }}
-          title="Refresh real-time activity status"
-        >
-          <RotateCw size={14} className={refreshing ? 'spinner' : ''} />
-          {refreshing ? 'Refreshing...' : 'Refresh Status'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Filter size={15} style={{ color: '#64748B' }} />
+            <select
+              value={selectedUnitFilter}
+              onChange={(e) => setSelectedUnitFilter(e.target.value)}
+              style={{
+                fontSize: '0.8125rem',
+                padding: '5px 10px',
+                borderRadius: '6px',
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#F8FAFC',
+                color: '#1A365D',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+              title="Filter interns by department/unit"
+            >
+              <option value="ALL">All Departments ({students.length})</option>
+              {(units || []).map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          </div>
+
+          <button 
+            onClick={handleRefresh} 
+            disabled={refreshing}
+            type="button"
+            className="btn btn-secondary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.8125rem',
+              padding: '6px 12px',
+              height: '32px'
+            }}
+            title="Refresh real-time activity status"
+          >
+            <RotateCw size={14} className={refreshing ? 'spinner' : ''} />
+            {refreshing ? 'Refreshing...' : 'Refresh Status'}
+          </button>
+        </div>
       </div>
 
       <div className="table-container">
@@ -117,8 +150,8 @@ const Students = () => {
             </tr>
           </thead>
           <tbody>
-            {students.length > 0 ? (
-              students.map((student) => {
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => {
                 const durationLabel = student.siwesDuration === '3_months' 
                   ? '3 Months (12 Wks)' 
                   : student.siwesDuration === '1_year' 
@@ -231,7 +264,11 @@ const Students = () => {
               })
             ) : (
               <tr>
-                <td colSpan="8" style={styles.emptyRow}>No students registered. Send invites to get started.</td>
+                <td colSpan="8" style={styles.emptyRow}>
+                  {selectedUnitFilter === 'ALL' 
+                    ? 'No students registered. Send invites to get started.'
+                    : `No students registered under "${selectedUnitFilter}".`}
+                </td>
               </tr>
             )}
           </tbody>

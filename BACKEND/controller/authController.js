@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const User = require('../model/User');
 const Progress = require('../model/Progress');
+const Attendance = require('../model/Attendance');
+const { normalizeToUTCDate, checkClearanceEligibility } = require('./attendanceController');
 const nodemailer = require('nodemailer');
 const { generateInviteEmailHtml } = require('../utils/emailTemplate');
 
@@ -35,10 +37,61 @@ const login = async (req, res) => {
     user.lastActive = now;
     user.password = undefined;
 
+    let attendanceSummary = null;
+    if (user.role === 'student') {
+      try {
+        const today = normalizeToUTCDate(now);
+        const durationWeeks = user.siwesDurationWeeks || 24;
+        let weekNumber = 1;
+        if (user.siwesStartDate) {
+          const diffMs = now.getTime() - new Date(user.siwesStartDate).getTime();
+          weekNumber = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000));
+          if (weekNumber < 1) weekNumber = 1;
+          if (weekNumber > durationWeeks) weekNumber = durationWeeks;
+        }
+
+        const existingRecord = await Attendance.findOne({
+          student: user._id,
+          date: today
+        });
+
+        let isNewCheckIn = false;
+        if (!existingRecord) {
+          try {
+            await Attendance.create({
+              student: user._id,
+              date: today,
+              weekNumber
+            });
+            isNewCheckIn = true;
+          } catch (attErr) {
+            // Tolerate unique compound index race condition
+            if (attErr.code !== 11000) {
+              console.error('Auto attendance creation error:', attErr.message);
+            }
+          }
+        }
+
+        const eligibility = await checkClearanceEligibility(user._id);
+        attendanceSummary = {
+          daysLogged: eligibility.totalDays,
+          weeksCleared: eligibility.compliantWeeks,
+          currentWeek: weekNumber,
+          checkedInToday: true,
+          isNewCheckIn
+        };
+      } catch (attSummaryErr) {
+        console.error('Auto attendance processing error:', attSummaryErr.message);
+      }
+    }
+
     return res.status(200).json({
       status: 'success',
       token,
-      data: { user }
+      data: { 
+        user,
+        ...(attendanceSummary ? { attendanceSummary } : {})
+      }
     });
   } catch (error) {
     console.error('Login error:', error.message);

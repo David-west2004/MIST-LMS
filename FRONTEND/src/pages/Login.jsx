@@ -20,6 +20,12 @@ const Login = () => {
       const res = await api.login(email, password);
       localStorage.setItem('token', res.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+      if (res.data.attendanceSummary) {
+        localStorage.setItem('attendanceSummary', JSON.stringify(res.data.attendanceSummary));
+        if (res.data.attendanceSummary.isNewCheckIn) {
+          sessionStorage.setItem('attendanceJustLogged', 'true');
+        }
+      }
 
       if (res.data.user.role === 'admin') {
         navigate('/admin/students');

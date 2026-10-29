@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
+import { useUnits } from '../../hooks/useUnits';
 import { 
   FileText, 
   Plus, 
@@ -18,7 +19,7 @@ import {
 
 const Assignments = () => {
   const [assignments, setAssignments] = useState([]);
-  const [units, setUnits] = useState([]);
+  const { units, loading: loadingUnits, refetchUnits } = useUnits();
   const [selectedUnitFilter, setSelectedUnitFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -34,29 +35,17 @@ const Assignments = () => {
   const [formDesc, setFormDesc] = useState('');
   const [formDeadline, setFormDeadline] = useState('');
 
-  const fetchUnitsAndAssignments = async () => {
+  // Default formUnit when units load
+  useEffect(() => {
+    if (!formUnit && units.length > 0) {
+      setFormUnit(units[0]);
+    }
+  }, [units, formUnit]);
+
+  const fetchAssignments = async () => {
     try {
       setLoading(true);
       setError('');
-      
-      // 1. Fetch available units from curricula
-      const curriculaRes = await api.getCurricula();
-      const curriculaList = curriculaRes.data?.curricula || [];
-      const dbUnits = curriculaList.map(c => c.unit);
-      
-      const fallbackUnits = [
-        'Software Development',
-        'Cyber Security',
-        'Hardware & Network Engineering',
-        'Data & Systems Administration'
-      ];
-      const combinedUnits = Array.from(new Set([...dbUnits, ...fallbackUnits]));
-      setUnits(combinedUnits);
-      if (!formUnit && combinedUnits.length > 0) {
-        setFormUnit(combinedUnits[0]);
-      }
-
-      // 2. Fetch all assignments
       const res = await api.getAllAdminAssignments();
       setAssignments(res.data?.assignments || []);
     } catch (err) {
@@ -67,8 +56,16 @@ const Assignments = () => {
   };
 
   useEffect(() => {
-    fetchUnitsAndAssignments();
+    fetchAssignments();
   }, []);
+
+  const handleOpenCreateModal = () => {
+    refetchUnits();
+    if (!formUnit && units.length > 0) {
+      setFormUnit(units[0]);
+    }
+    setShowCreateModal(true);
+  };
 
   const handleCreateAssignment = async (e) => {
     e.preventDefault();
@@ -96,7 +93,8 @@ const Assignments = () => {
       setFormDesc('');
       setFormModule('');
       setFormDeadline('');
-      await fetchUnitsAndAssignments();
+      await fetchAssignments();
+      await refetchUnits();
     } catch (err) {
       setError(err.message || 'Failed to create assignment.');
     } finally {
@@ -133,7 +131,7 @@ const Assignments = () => {
           </p>
         </div>
         <button 
-          onClick={() => { setError(''); setSuccessMsg(''); setShowCreateModal(true); }}
+          onClick={() => { setError(''); setSuccessMsg(''); handleOpenCreateModal(); }}
           className="btn btn-primary"
           style={styles.createBtn}
         >
@@ -168,7 +166,7 @@ const Assignments = () => {
             style={styles.selectFilter}
           >
             <option value="ALL">All Department Tracks ({assignments.length})</option>
-            {units.map(u => (
+            {(units || []).map(u => (
               <option key={u} value={u}>{u}</option>
             ))}
           </select>
@@ -337,7 +335,7 @@ const Assignments = () => {
                     className="form-control"
                     required
                   >
-                    {units.map(u => (
+                    {(units || []).map(u => (
                       <option key={u} value={u}>{u}</option>
                     ))}
                   </select>

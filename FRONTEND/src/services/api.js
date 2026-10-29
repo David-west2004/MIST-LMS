@@ -79,6 +79,7 @@ export const api = {
   // Curriculum Management
   getMyCurriculum: () => request('/curriculum/my-unit'),
   getCurricula: () => request('/curriculum'),
+  getUnits: () => request('/curriculum/units'),
   createCurriculum: (unit, modules) => request('/curriculum', {
     method: 'POST',
     body: JSON.stringify({ unit, modules })

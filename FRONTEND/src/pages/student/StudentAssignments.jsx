@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
+import StudentNavbar from '../../components/StudentNavbar';
 import { 
   FileText, 
   Upload, 
@@ -69,6 +70,7 @@ const StudentAssignments = () => {
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('attendanceSummary');
       navigate('/login');
     }
   };
@@ -79,37 +81,18 @@ const StudentAssignments = () => {
 
   return (
     <div style={styles.page}>
-      {/* Top Header */}
-      <header style={styles.header}>
-        <div style={styles.brandCluster}>
-          <button 
-            type="button" 
-            onClick={() => navigate('/student/curriculum')} 
-            style={styles.backBtn}
-            title="Return to Curriculum"
-          >
-            <ArrowLeft size={16} />
-            Curriculum
-          </button>
+      <StudentNavbar user={user} />
 
-          <div style={styles.divider} />
-
-          <div style={styles.badge}>
-            <img 
-              src={mistLogo} 
-              alt="Lagos State Coat of Arms" 
-              style={{ height: '28px', width: 'auto', objectFit: 'contain' }} 
-            />
-            <span style={styles.badgeLabel}>LAGOS STATE // MIST</span>
+      {/* Main Container */}
+      <main style={styles.container}>
+        {/* Banner with stats */}
+        <div style={styles.heroBanner}>
+          <div>
+            <h2 style={styles.heroTitle}>Unit Assignments & Submissions</h2>
+            <p style={styles.heroSub}>
+              Assigned Track: <strong>{user.unit?.toUpperCase() || 'GENERAL'}</strong> • Upload task deliverables for verification
+            </p>
           </div>
-
-          <div style={styles.titleGroup}>
-            <h1 style={styles.title}>Student IT Portal</h1>
-            <span style={styles.subtitle}>ASSIGNMENTS & CLASSWORK // UNIT: {user.unit?.toUpperCase()}</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={styles.statsCluster}>
             <div style={styles.statBox}>
               <span style={styles.statNum}>{submittedCount}/{total}</span>
@@ -122,33 +105,7 @@ const StudentAssignments = () => {
               <span style={styles.statLabel}>PENDING</span>
             </div>
           </div>
-
-          <button 
-            onClick={handleLogout} 
-            type="button"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              borderRadius: '4px',
-              color: '#FFFFFF',
-              fontSize: '0.75rem',
-              fontWeight: '500',
-              cursor: 'pointer'
-            }}
-            title="Terminate session"
-          >
-            <LogOut size={14} />
-            EXIT
-          </button>
         </div>
-      </header>
-
-      {/* Main Container */}
-      <main style={styles.container}>
         {error && (
           <div style={styles.errorAlert}>
             <AlertCircle size={18} />
@@ -292,9 +249,33 @@ const StudentAssignments = () => {
 const styles = {
   page: {
     minHeight: '100vh',
-    backgroundColor: '#F7FAFC',
-    color: '#2D3748',
+    backgroundColor: '#F8FAFC',
+    color: '#1E293B',
     fontFamily: "'Inter', sans-serif",
+  },
+  heroBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: '12px',
+    padding: '20px 24px',
+    marginBottom: '24px',
+    flexWrap: 'wrap',
+    gap: '16px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
+  },
+  heroTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '800',
+    color: '#1A365D',
+    margin: '0 0 4px 0',
+  },
+  heroSub: {
+    fontSize: '0.8125rem',
+    color: '#64748B',
+    margin: 0,
   },
   header: {
     display: 'flex',
