@@ -27,7 +27,7 @@
 //     name: 'MIST Test Admin',
 //     email: adminEmail,
 //     password: adminPassword,
-//     role: 'admin',
+//     role: 'supervisor',
 //     unit: 'Administration'
 //   });
 //   console.log('Seeded test admin.');

@@ -1,15 +1,13 @@
-const Attendance = require('../model/Attendance');
-const User = require('../model/User');
-// const { checkAlausaGeofence, DEFAULT_MAX_RADIUS_METERS } = require('../utils/geofence');
+const { Attendance, User } = require('../models');
 
 /**
- * Normalizes a date to UTC midnight for consistent daily calendar comparison.
+ * Normalizes a date to YYYY-MM-DD string for MySQL DATEONLY column.
  * @param {Date|number|string} [date]
- * @returns {Date}
+ * @returns {string}
  */
 const normalizeToUTCDate = (date = new Date()) => {
   const d = new Date(date);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  return d.toISOString().split('T')[0];
 };
 
 /**
@@ -19,19 +17,10 @@ const normalizeToUTCDate = (date = new Date()) => {
  * 1. Total Target Days = student.siwesDurationWeeks * 3
  * 2. Student must log at least 3 check-ins for EVERY single week of their duration (week 1 to siwesDurationWeeks).
  * 
- * @param {string} studentId 
- * @returns {Promise<{
- *   eligible: boolean,
- *   totalDays: number,
- *   targetDays: number,
- *   compliantWeeks: number,
- *   targetWeeks: number,
- *   missingWeeks: number[],
- *   weeklyBreakdown: Record<number, number>
- * }>}
+ * @param {number|string} studentId 
  */
 const checkClearanceEligibility = async (studentId) => {
-  const student = await User.findById(studentId);
+  const student = await User.findByPk(studentId);
   if (!student) {
     throw new Error('Student not found');
   }
@@ -40,7 +29,9 @@ const checkClearanceEligibility = async (studentId) => {
   const targetDays = durationWeeks * 3;
 
   // Retrieve all attendance records for student
-  const attendanceRecords = await Attendance.find({ student: studentId });
+  const attendanceRecords = await Attendance.findAll({
+    where: { userId: studentId }
+  });
   const totalDays = attendanceRecords.length;
 
   // Group check-in counts by weekNumber
@@ -49,25 +40,25 @@ const checkClearanceEligibility = async (studentId) => {
     weeklyBreakdown[w] = 0;
   }
 
-  attendanceRecords.forEach((record) => {
-    if (record.weekNumber >= 1 && record.weekNumber <= durationWeeks) {
-      weeklyBreakdown[record.weekNumber] = (weeklyBreakdown[record.weekNumber] || 0) + 1;
+  attendanceRecords.forEach(rec => {
+    const w = rec.weekNumber;
+    if (w >= 1 && w <= durationWeeks) {
+      weeklyBreakdown[w] = (weeklyBreakdown[w] || 0) + 1;
     }
   });
 
-  const missingWeeks = [];
   let compliantWeeks = 0;
+  const missingWeeks = [];
 
   for (let w = 1; w <= durationWeeks; w++) {
-    const count = weeklyBreakdown[w] || 0;
-    if (count >= 3) {
+    if (weeklyBreakdown[w] >= 3) {
       compliantWeeks++;
     } else {
       missingWeeks.push(w);
     }
   }
 
-  const eligible = missingWeeks.length === 0 && compliantWeeks === durationWeeks;
+  const eligible = compliantWeeks === durationWeeks;
 
   return {
     eligible,
@@ -81,72 +72,40 @@ const checkClearanceEligibility = async (studentId) => {
 };
 
 /**
- * Handles daily attendance check-in within the Alausa Secretariat geofence.
+ * Verified student daily attendance check-in.
  * POST /api/attendance/check-in
  */
 const checkIn = async (req, res) => {
   try {
     const student = req.user;
-    if (!student) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
+    const { latitude, longitude } = req.body;
 
     if (student.isBlocked) {
-      return res.status(403).json({ message: 'Access denied: Account suspended.' });
-    }
-
-    // const { latitude, longitude } = req.body;
-    // if (latitude === undefined || longitude === undefined || typeof latitude !== 'number' || typeof longitude !== 'number') {
-    //   return res.status(400).json({ 
-    //     message: 'Invalid request: GPS coordinates (numeric latitude and longitude) are required.' 
-    //   });
-    // }
-
-    // // 1. Enforce Alausa Secretariat Geofence
-    // const geo = checkAlausaGeofence(latitude, longitude, DEFAULT_MAX_RADIUS_METERS);
-    // if (!geo.inside) {
-    //   return res.status(400).json({
-    //     status: 'fail',
-    //     message: `Check-in rejected: You are outside the Alausa Secretariat boundary. Distance: ${geo.distance}m (Maximum allowed: ${geo.maxRadius}m).`,
-    //     distance: geo.distance,
-    //     maxRadius: geo.maxRadius
-    //   });
-    // }
-
-    // 2. Validate SIWES Dates and Compute Current Week Number
-    if (!student.siwesStartDate) {
-      return res.status(400).json({ 
-        message: 'SIWES start date is not configured on your intern profile. Please contact your administrator.' 
+      return res.status(403).json({
+        status: 'fail',
+        message: 'Access denied. Your student account has been suspended.'
       });
     }
 
-    const startDate = new Date(student.siwesStartDate).getTime();
-    const now = Date.now();
     const durationWeeks = student.siwesDurationWeeks || 24;
+    let weekNumber = 1;
 
-    const diffMs = now - startDate;
-    const weekNumber = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000));
-
-    if (weekNumber < 1) {
-      return res.status(400).json({
-        status: 'fail',
-        message: `Check-in rejected: Your SIWES internship tenure begins on ${new Date(student.siwesStartDate).toLocaleDateString('en-GB')}.`
-      });
+    if (student.siwesStartDate) {
+      const now = new Date();
+      const diffMs = now.getTime() - new Date(student.siwesStartDate).getTime();
+      weekNumber = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000));
+      if (weekNumber < 1) weekNumber = 1;
+      if (weekNumber > durationWeeks) weekNumber = durationWeeks;
     }
 
-    if (weekNumber > durationWeeks) {
-      return res.status(400).json({
-        status: 'fail',
-        message: `Check-in rejected: Your SIWES internship duration (${durationWeeks} weeks) has officially elapsed.`
-      });
-    }
-
-    // 3. Normalize Date & Enforce 1 Check-In Per Calendar Day
     const today = normalizeToUTCDate(new Date());
 
+    // Check if attendance already exists for today
     const existingCheckIn = await Attendance.findOne({
-      student: student._id,
-      date: today
+      where: {
+        userId: student.id,
+        date: today
+      }
     });
 
     if (existingCheckIn) {
@@ -156,29 +115,33 @@ const checkIn = async (req, res) => {
       });
     }
 
-    // 4. Save Attendance Record
     const attendance = await Attendance.create({
-      student: student._id,
+      userId: student.id,
       date: today,
       weekNumber,
-      coordinates: { latitude, longitude }
+      status: 'present',
+      latitude: latitude || null,
+      longitude: longitude || null
     });
 
     return res.status(201).json({
       status: 'success',
-      message: `Check-in verified successfully for Week ${weekNumber} inside Alausa Secretariat.`,
+      message: `Check-in verified successfully for Week ${weekNumber}.`,
       data: {
         attendance: {
-          id: attendance._id,
+          id: attendance.id,
           date: attendance.date,
           weekNumber: attendance.weekNumber,
-          coordinates: attendance.coordinates
+          status: attendance.status,
+          coordinates: {
+            latitude: attendance.latitude,
+            longitude: attendance.longitude
+          }
         }
       }
     });
   } catch (error) {
-    // Handle compound unique index duplicate race condition
-    if (error.code === 11000) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         status: 'fail',
         message: 'Attendance already logged for today.'
@@ -199,8 +162,10 @@ const getMyAttendanceSummary = async (req, res) => {
     const today = normalizeToUTCDate(new Date());
 
     const todayRecord = await Attendance.findOne({
-      student: student._id,
-      date: today
+      where: {
+        userId: student.id,
+        date: today
+      }
     });
 
     const durationWeeks = student.siwesDurationWeeks || 24;
@@ -210,21 +175,27 @@ const getMyAttendanceSummary = async (req, res) => {
       currentWeek = Math.max(1, Math.min(durationWeeks, Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000))));
     }
 
-    const eligibility = await checkClearanceEligibility(student._id);
+    const eligibility = await checkClearanceEligibility(student.id);
 
-    const allLogs = await Attendance.find({ student: student._id })
-      .sort({ date: -1 })
-      .limit(60);
+    const allLogs = await Attendance.findAll({
+      where: { userId: student.id },
+      order: [['date', 'DESC']],
+      limit: 60
+    });
 
     return res.status(200).json({
       status: 'success',
       data: {
         checkedInToday: !!todayRecord,
         todayRecord: todayRecord ? {
-          id: todayRecord._id,
+          id: todayRecord.id,
           date: todayRecord.date,
           weekNumber: todayRecord.weekNumber,
-          coordinates: todayRecord.coordinates
+          status: todayRecord.status,
+          coordinates: {
+            latitude: todayRecord.latitude,
+            longitude: todayRecord.longitude
+          }
         } : null,
         currentWeek,
         durationWeeks,

@@ -1,1 +1,1 @@
-module.exports = require('../../BACKEND/model/User');
+module.exports = require('../../BACKEND/models/User');

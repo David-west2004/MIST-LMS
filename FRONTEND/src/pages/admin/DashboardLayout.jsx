@@ -39,9 +39,9 @@ const DashboardLayout = () => {
               alt="MIST Logo" 
               style={{ height: '32px', width: 'auto', objectFit: 'contain' }} 
             />
-            <span style={styles.logoText}>MIST Admin</span>
+            <span style={styles.logoText}>MIST Supervisor</span>
           </div>
-          <p style={styles.sidebarSubtitle}>IT Portal Controller</p>
+          <p style={styles.sidebarSubtitle}>Supervisor Portal Controller</p>
         </div>
 
         <nav style={styles.nav}>
@@ -62,8 +62,8 @@ const DashboardLayout = () => {
 
         <div style={styles.sidebarFooter}>
           <div style={styles.adminProfile}>
-            <span style={styles.adminName}>{user.name || 'Admin'}</span>
-            <span style={styles.adminRole}>Administrator</span>
+            <span style={styles.adminName}>{user.name || 'Supervisor'}</span>
+            <span style={styles.adminRole}>Supervisor</span>
           </div>
           <button onClick={handleLogout} style={styles.logoutBtn}>
             <LogOut size={16} />

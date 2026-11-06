@@ -4,7 +4,7 @@ const { login, registerNewStudent, verifyInviteToken, completeRegistration, rese
 const { protect, restrictTo } = require('../middleware/auth');
 
 router.post('/login', login);
-router.post('/invite', protect, restrictTo('admin'), registerNewStudent);
+router.post('/invite', protect, restrictTo('supervisor'), registerNewStudent);
 router.get('/verify-invite/:token', verifyInviteToken);
 router.post('/register-invited', completeRegistration);
 router.post('/reset-password', resetPassword);

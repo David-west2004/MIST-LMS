@@ -1,46 +1,39 @@
-const Progress = require('../model/Progress');
-const Curriculum = require('../model/Curriculum');
-const Assignment = require('../model/Assignment');
-const User = require('../model/User');
+const { Progress, Material, Assignment, Submission, User } = require('../models');
 
 const calculatePercentage = async (userId, unit) => {
   // 1. Materials calculation (50% weight)
-  const curriculum = await Curriculum.findOne({ unit });
-  let totalMaterials = 0;
+  const totalMaterials = await Material.count({ where: { unit } });
   let completedMaterialsCount = 0;
 
-  if (curriculum && curriculum.modules) {
-    const allMaterialIds = [];
-    curriculum.modules.forEach(module => {
-      (module.materials || []).forEach(material => {
-        allMaterialIds.push(material._id.toString());
-      });
-    });
-    totalMaterials = allMaterialIds.length;
+  if (totalMaterials > 0) {
+    const materials = await Material.findAll({ where: { unit }, attributes: ['id'] });
+    const materialIds = materials.map(m => m.id);
 
-    if (totalMaterials > 0) {
-      const progress = await Progress.findOne({ userId });
-      if (progress && progress.completedMaterials) {
-        completedMaterialsCount = progress.completedMaterials.filter(id => 
-          allMaterialIds.includes(id.toString())
-        ).length;
+    completedMaterialsCount = await Progress.count({
+      where: {
+        userId,
+        materialId: materialIds,
+        isCompleted: true
       }
-    }
+    });
   }
 
   // 2. Assignments calculation (50% weight)
-  const assignments = await Assignment.find({ unit });
+  const assignments = await Assignment.findAll({ where: { unit }, attributes: ['id'] });
   const totalAssignments = assignments.length;
   let submittedAssignmentsCount = 0;
 
   if (totalAssignments > 0) {
-    submittedAssignmentsCount = assignments.filter(assignment =>
-      (assignment.submissions || []).some(sub => sub.student && sub.student.toString() === userId.toString())
-    ).length;
+    const assignmentIds = assignments.map(a => a.id);
+    submittedAssignmentsCount = await Submission.count({
+      where: {
+        studentId: userId,
+        assignmentId: assignmentIds
+      }
+    });
   }
 
-  // 3. 50/50 Weighted Formula:
-  // Progress = (Completed Materials / Total Materials * 50%) + (Submitted Assignments / Total Assignments * 50%)
+  // 3. 50/50 Weighted Formula
   const materialsScore = totalMaterials > 0 ? (completedMaterialsCount / totalMaterials) * 50 : 0;
   const assignmentsScore = totalAssignments > 0 ? (submittedAssignmentsCount / totalAssignments) * 50 : 0;
 
@@ -56,26 +49,33 @@ const toggleMaterialStatus = async (req, res) => {
       return res.status(400).json({ message: 'Material ID is required' });
     }
 
-    let progress = await Progress.findOne({ userId });
-    if (!progress) {
-      progress = new Progress({ userId, completedMaterials: [] });
-    }
+    let progress = await Progress.findOne({
+      where: { userId, materialId }
+    });
 
-    const index = progress.completedMaterials.indexOf(materialId);
-    if (index > -1) {
-      progress.completedMaterials.splice(index, 1);
+    if (progress) {
+      progress.isCompleted = !progress.isCompleted;
+      await progress.save();
     } else {
-      progress.completedMaterials.push(materialId);
+      progress = await Progress.create({
+        userId,
+        materialId,
+        isCompleted: true
+      });
     }
 
-    await progress.save();
+    const allCompleted = await Progress.findAll({
+      where: { userId, isCompleted: true },
+      attributes: ['materialId']
+    });
 
+    const completedMaterialIds = allCompleted.map(p => p.materialId);
     const percentage = await calculatePercentage(userId, req.user.unit);
 
     return res.status(200).json({
       status: 'success',
       data: {
-        completedMaterials: progress.completedMaterials,
+        completedMaterials: completedMaterialIds,
         percentage
       }
     });
@@ -88,14 +88,20 @@ const toggleMaterialStatus = async (req, res) => {
 const getMyProgress = async (req, res) => {
   try {
     const userId = req.user.id;
-    const progress = await Progress.findOne({ userId });
-    const completedMaterials = progress ? progress.completedMaterials : [];
-    const percentage = await calculatePercentage(userId, req.user.unit);
+    const unit = req.user.unit;
+
+    const allCompleted = await Progress.findAll({
+      where: { userId, isCompleted: true },
+      attributes: ['materialId']
+    });
+
+    const completedMaterialIds = allCompleted.map(p => p.materialId);
+    const percentage = await calculatePercentage(userId, unit);
 
     return res.status(200).json({
       status: 'success',
       data: {
-        completedMaterials,
+        completedMaterials: completedMaterialIds,
         percentage
       }
     });
@@ -108,26 +114,29 @@ const getMyProgress = async (req, res) => {
 const getStudentProgress = async (req, res) => {
   try {
     const { studentId } = req.params;
-    const student = await User.findById(studentId);
+    const student = await User.findByPk(studentId);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const progress = await Progress.findOne({ userId: studentId });
-    const completedMaterials = progress ? progress.completedMaterials : [];
+    const allCompleted = await Progress.findAll({
+      where: { userId: studentId, isCompleted: true },
+      attributes: ['materialId']
+    });
+
+    const completedMaterialIds = allCompleted.map(p => p.materialId);
     const percentage = await calculatePercentage(studentId, student.unit);
 
     return res.status(200).json({
       status: 'success',
       data: {
         student: {
-          id: student._id,
+          id: student.id,
           name: student.name,
           email: student.email,
-          unit: student.unit,
-          isBlocked: student.isBlocked
+          unit: student.unit
         },
-        completedMaterials,
+        completedMaterials: completedMaterialIds,
         percentage
       }
     });

@@ -6,7 +6,8 @@ const {
   getMyAssignments,
   createAssignment,
   deleteAssignment,
-  submitAssignment
+  submitAssignment,
+  gradeSubmission
 } = require('../controller/assignmentController');
 const { protect, restrictTo } = require('../middleware/auth');
 const upload = require('../middleware/uploadMiddleware');
@@ -16,9 +17,10 @@ router.get('/my-unit', protect, getMyAssignments);
 router.get('/unit/:unit', protect, getAssignmentsByUnit);
 router.post('/:id/submit', protect, upload.single('file'), submitAssignment);
 
-// Admin endpoints
-router.get('/', protect, restrictTo('admin'), getAllAdminAssignments);
-router.post('/', protect, restrictTo('admin'), createAssignment);
-router.delete('/:id', protect, restrictTo('admin'), deleteAssignment);
+// Supervisor endpoints
+router.get('/', protect, restrictTo('supervisor'), getAllAdminAssignments);
+router.post('/', protect, restrictTo('supervisor'), createAssignment);
+router.delete('/:id', protect, restrictTo('supervisor'), deleteAssignment);
+router.put('/submissions/:submissionId/grade', protect, restrictTo('supervisor'), gradeSubmission);
 
 module.exports = router;

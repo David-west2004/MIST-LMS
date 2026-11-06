@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../model/User');
+const { User } = require('../models');
 
 const protect = async (req, res, next) => {
   try {
@@ -12,26 +12,22 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Not authorized, token missing' });
     }
 
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretkeyformiststudentitportal2026');
 
-    // Get user from token
-    const user = await User.findById(decoded.id);
+    const user = await User.findByPk(decoded.id);
     if (!user) {
       return res.status(401).json({ message: 'Not authorized, user not found' });
     }
 
-    // Check if user is blocked
     if (user.isBlocked) {
       return res.status(403).json({ message: 'Access denied. Account has been suspended.' });
     }
 
-    // Update lastActive timestamp on incoming requests (bypassing logout)
     const isLogout = req.originalUrl && req.originalUrl.includes('/logout');
     if (!isLogout) {
       const now = new Date();
       user.lastActive = now;
-      User.findByIdAndUpdate(user._id, { lastActive: now }).catch(err => {
+      user.save().catch(err => {
         console.error('Failed to update user lastActive:', err.message);
       });
     }
@@ -46,14 +42,22 @@ const protect = async (req, res, next) => {
 
 const restrictTo = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden. Insufficient permissions.' });
     }
     next();
   };
 };
 
+const supervisorOnly = (req, res, next) => {
+  if (!req.user || req.user.role !== 'supervisor') {
+    return res.status(403).json({ message: 'Forbidden. Supervisor access required.' });
+  }
+  next();
+};
+
 module.exports = {
   protect,
-  restrictTo
+  restrictTo,
+  supervisorOnly
 };

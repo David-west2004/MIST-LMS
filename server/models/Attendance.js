@@ -1,1 +1,1 @@
-module.exports = require('../../BACKEND/model/Attendance');
+module.exports = require('../../BACKEND/models/Attendance');

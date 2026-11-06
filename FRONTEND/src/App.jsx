@@ -19,13 +19,13 @@ const PrivateRoute = ({ children }) => {
   return children;
 };
 
-// Route Guard for administrators only
+// Route Guard for supervisors only
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   if (!token) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/login" replace />;
+  if (user.role !== 'supervisor') return <Navigate to="/login" replace />;
 
   return children;
 };
@@ -36,7 +36,7 @@ const RootRedirect = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   if (!token) return <Navigate to="/login" replace />;
-  if (user.role === 'admin') return <Navigate to="/admin/students" replace />;
+  if (user.role === 'supervisor') return <Navigate to="/admin/students" replace />;
   return <Navigate to="/student/curriculum" replace />;
 };
 

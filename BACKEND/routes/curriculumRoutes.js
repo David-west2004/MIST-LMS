@@ -19,8 +19,8 @@ router.get('/units', protect, getDistinctUnits);
 // Student-accessible route to get their own unit's curriculum
 router.get('/my-unit', protect, getMyCurriculum);
 
-// Admin-only routes
-router.use(protect, restrictTo('admin'));
+// Supervisor-only routes
+router.use(protect, restrictTo('supervisor'));
 
 router.post('/upload', upload.single('file'), uploadMaterial);
 

@@ -27,7 +27,7 @@ const Login = () => {
         }
       }
 
-      if (res.data.user.role === 'admin') {
+      if (res.data.user.role === 'supervisor') {
         navigate('/admin/students');
       } else {
         navigate('/student/curriculum');

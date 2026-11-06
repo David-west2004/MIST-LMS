@@ -1,5 +1,4 @@
 require('dotenv').config();
-const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./db/connection');
@@ -14,7 +13,7 @@ const clearanceRoutes = require('./routes/clearanceRoutes');
 const { registerNewStudent } = require('./controller/authController');
 const { protect, restrictTo } = require('./middleware/auth');
 
-// Connect to database
+// Connect to MySQL database via Sequelize and sync schema
 connectDB();
 
 const app = express();
@@ -23,12 +22,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Mount routers
 app.use('/api/auth', authRoutes);
-app.post('/api/admin/invite', protect, restrictTo('admin'), registerNewStudent);
+app.post('/api/admin/invite', protect, restrictTo('supervisor'), registerNewStudent);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/students', studentRoutes);

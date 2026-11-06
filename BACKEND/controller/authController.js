@@ -2,9 +2,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-const User = require('../model/User');
-const Progress = require('../model/Progress');
-const Attendance = require('../model/Attendance');
+const { Op } = require('sequelize');
+const { User, Attendance, Progress } = require('../models');
 const { normalizeToUTCDate, checkClearanceEligibility } = require('./attendanceController');
 const nodemailer = require('nodemailer');
 const { generateInviteEmailHtml } = require('../utils/emailTemplate');
@@ -22,7 +21,7 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Please provide email and password' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ where: { email } });
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -31,11 +30,10 @@ const login = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Please, reach out to the system administrator.' });
     }
 
-    const token = signToken(user._id);
+    const token = signToken(user.id);
     const now = new Date();
-    await User.findByIdAndUpdate(user._id, { lastActive: now });
     user.lastActive = now;
-    user.password = undefined;
+    await user.save();
 
     let attendanceSummary = null;
     if (user.role === 'student') {
@@ -51,46 +49,53 @@ const login = async (req, res) => {
         }
 
         const existingRecord = await Attendance.findOne({
-          student: user._id,
-          date: today
+          where: {
+            userId: user.id,
+            date: today
+          }
         });
 
         let isNewCheckIn = false;
         if (!existingRecord) {
           try {
             await Attendance.create({
-              student: user._id,
+              userId: user.id,
               date: today,
-              weekNumber
+              weekNumber,
+              status: 'present'
             });
             isNewCheckIn = true;
           } catch (attErr) {
-            // Tolerate unique compound index race condition
-            if (attErr.code !== 11000) {
-              console.error('Auto attendance creation error:', attErr.message);
-            }
+            console.error('Auto attendance creation error:', attErr.message);
           }
         }
 
-        const eligibility = await checkClearanceEligibility(user._id);
+        const eligibility = await checkClearanceEligibility(user.id);
+
         attendanceSummary = {
-          daysLogged: eligibility.totalDays,
-          weeksCleared: eligibility.compliantWeeks,
-          currentWeek: weekNumber,
           checkedInToday: true,
-          isNewCheckIn
+          isNewCheckIn,
+          date: today,
+          weekNumber,
+          eligibility
         };
       } catch (attSummaryErr) {
-        console.error('Auto attendance processing error:', attSummaryErr.message);
+        console.error('Login auto-attendance processing error:', attSummaryErr.message);
       }
     }
+
+    const userObj = user.toJSON ? user.toJSON() : { ...user };
+    delete userObj.password;
 
     return res.status(200).json({
       status: 'success',
       token,
-      data: { 
-        user,
-        ...(attendanceSummary ? { attendanceSummary } : {})
+      data: {
+        user: {
+          ...userObj,
+          _id: user.id
+        },
+        attendanceSummary
       }
     });
   } catch (error) {
@@ -105,7 +110,7 @@ const registerNewStudent = async (req, res) => {
       name, 
       email, 
       unit, 
-      siwesDuration = '6_months', 
+      siwesDuration, 
       siwesStartDate, 
       institution, 
       matricNumber, 
@@ -113,32 +118,27 @@ const registerNewStudent = async (req, res) => {
     } = req.body;
 
     if (!name || !email || !unit) {
-      return res.status(400).json({ message: 'Please provide name, email, and unit' });
+      return res.status(400).json({ message: 'Name, email, and unit are required.' });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
-      return res.status(400).json({ message: 'User with this email already exists' });
+      return res.status(400).json({ message: 'A student or account with this email address already exists.' });
     }
 
-    const validDurations = {
-      '3_months': 12,
-      '6_months': 24,
-      '1_year': 52
-    };
+    const durationKey = ['3_months', '6_months', '1_year'].includes(siwesDuration) 
+      ? siwesDuration 
+      : '6_months';
 
-    const durationKey = validDurations[siwesDuration] ? siwesDuration : '6_months';
-    const siwesDurationWeeks = validDurations[durationKey];
+    let siwesDurationWeeks = 24;
+    if (durationKey === '3_months') siwesDurationWeeks = 12;
+    if (durationKey === '1_year') siwesDurationWeeks = 52;
 
     const startDate = siwesStartDate ? new Date(siwesStartDate) : new Date();
-    if (isNaN(startDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid siwesStartDate provided' });
-    }
-
     const siwesEndDate = new Date(startDate.getTime() + (siwesDurationWeeks * 7 * 24 * 60 * 60 * 1000));
 
     const inviteToken = crypto.randomBytes(32).toString('hex');
-    const tokenExpires = Date.now() + 48 * 60 * 60 * 1000; // 48 hours
+    const tokenExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     const newStudent = await User.create({
       name,
@@ -149,9 +149,9 @@ const registerNewStudent = async (req, res) => {
       siwesDurationWeeks,
       siwesStartDate: startDate,
       siwesEndDate,
-      institution: institution ? institution.trim() : undefined,
-      matricNumber: matricNumber ? matricNumber.trim() : undefined,
-      phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
+      institution: institution ? institution.trim() : null,
+      matricNumber: matricNumber ? matricNumber.trim() : null,
+      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
       isClearedForCompletion: false,
       inviteToken,
       tokenExpires
@@ -160,21 +160,11 @@ const registerNewStudent = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const inviteLink = `${frontendUrl}/register?token=${inviteToken}`;
 
-    console.log('\n==================================================');
-    console.log(`INVITATION LOGGED FOR DEVELOPMENT:`);
-    console.log(`Student: ${name} (${email})`);
-    console.log(`Unit: ${unit}`);
-    console.log(`SIWES Duration: ${durationKey} (${siwesDurationWeeks} weeks)`);
-    console.log(`Start Date: ${startDate.toISOString().split('T')[0]}`);
-    console.log(`End Date: ${siwesEndDate.toISOString().split('T')[0]}`);
-    console.log(`Invite Link: ${inviteLink}`);
-    console.log('==================================================\n');
-
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
       try {
         const transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
-          port: parseInt(process.env.SMTP_PORT) || 587,
+          port: parseInt(process.env.SMTP_PORT, 10) || 587,
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS
@@ -186,7 +176,7 @@ const registerNewStudent = async (req, res) => {
           {
             filename: 'MIST.webp',
             path: mistLogoPath,
-            cid: 'mistLogo' // referenced in HTML email template as cid:mistLogo
+            cid: 'mistLogo'
           }
         ] : [];
 
@@ -208,7 +198,6 @@ const registerNewStudent = async (req, res) => {
           }),
           attachments
         });
-        console.log(`Official branded invite email dispatched successfully to ${email}`);
       } catch (err) {
         console.error('Failed to send invite email:', err.message);
       }
@@ -221,7 +210,8 @@ const registerNewStudent = async (req, res) => {
         inviteToken,
         inviteLink,
         student: {
-          id: newStudent._id,
+          id: newStudent.id,
+          _id: newStudent.id,
           name: newStudent.name,
           email: newStudent.email,
           unit: newStudent.unit,
@@ -245,8 +235,10 @@ const verifyInviteToken = async (req, res) => {
   try {
     const { token } = req.params;
     const user = await User.findOne({
-      inviteToken: token,
-      tokenExpires: { $gt: Date.now() }
+      where: {
+        inviteToken: token,
+        tokenExpires: { [Op.gt]: new Date() }
+      }
     });
 
     if (!user) {
@@ -256,6 +248,8 @@ const verifyInviteToken = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       data: {
+        id: user.id,
+        _id: user.id,
         name: user.name,
         email: user.email,
         unit: user.unit,
@@ -298,8 +292,10 @@ const completeRegistration = async (req, res) => {
     }
 
     const user = await User.findOne({
-      inviteToken: token,
-      tokenExpires: { $gt: Date.now() }
+      where: {
+        inviteToken: token,
+        tokenExpires: { [Op.gt]: new Date() }
+      }
     });
 
     if (!user) {
@@ -311,13 +307,7 @@ const completeRegistration = async (req, res) => {
     user.tokenExpires = null;
     await user.save();
 
-    await Progress.findOneAndUpdate(
-      { userId: user._id },
-      { userId: user._id, completedMaterials: [] },
-      { upsert: true, new: true }
-    );
-
-    const jwtToken = signToken(user._id);
+    const jwtToken = signToken(user.id);
 
     return res.status(200).json({
       status: 'success',
@@ -325,7 +315,8 @@ const completeRegistration = async (req, res) => {
       token: jwtToken,
       data: {
         user: {
-          id: user._id,
+          id: user.id,
+          _id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
@@ -349,13 +340,21 @@ const completeRegistration = async (req, res) => {
 
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] }
+    });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    const userJson = user.toJSON ? user.toJSON() : { ...user };
     return res.status(200).json({
       status: 'success',
-      data: { user }
+      data: {
+        user: {
+          ...userJson,
+          _id: user.id
+        }
+      }
     });
   } catch (error) {
     console.error('Get profile error:', error.message);
@@ -377,8 +376,10 @@ const resetPassword = async (req, res) => {
     }
 
     const user = await User.findOne({
-      inviteToken: token,
-      tokenExpires: { $gt: Date.now() }
+      where: {
+        inviteToken: token,
+        tokenExpires: { [Op.gt]: new Date() }
+      }
     });
 
     if (!user) {
@@ -402,8 +403,8 @@ const resetPassword = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    if (req.user && req.user._id) {
-      await User.findByIdAndUpdate(req.user._id, { $set: { lastActive: null } });
+    if (req.user && req.user.id) {
+      await User.update({ lastActive: null }, { where: { id: req.user.id } });
     }
     return res.status(200).json({
       status: 'success',
@@ -424,4 +425,3 @@ module.exports = {
   logout,
   getMe
 };
-

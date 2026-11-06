@@ -1,4 +1,4 @@
-const User = require('../model/User');
+const { User } = require('../models');
 const { checkClearanceEligibility } = require('./attendanceController');
 const { generateCompletionCertificate } = require('../utils/certificateGenerator');
 const nodemailer = require('nodemailer');
@@ -10,7 +10,7 @@ const nodemailer = require('nodemailer');
  */
 const requestCompletionLetter = async (req, res) => {
   try {
-    const student = await User.findById(req.user._id);
+    const student = await User.findByPk(req.user.id);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
@@ -20,7 +20,7 @@ const requestCompletionLetter = async (req, res) => {
     }
 
     // 1. Evaluate Dynamic Clearance Policy Gate
-    const eligibility = await checkClearanceEligibility(student._id);
+    const eligibility = await checkClearanceEligibility(student.id);
 
     if (!eligibility.eligible) {
       return res.status(403).json({
@@ -34,7 +34,7 @@ const requestCompletionLetter = async (req, res) => {
           targetWeeks: eligibility.targetWeeks,
           missingWeeks: eligibility.missingWeeks,
           weeklyBreakdown: eligibility.weeklyBreakdown,
-          requirementDescription: 'Intern must log at least 3 geofenced check-ins at Alausa Secretariat for EVERY individual week of their tenure.'
+          requirementDescription: 'Intern must log at least 3 check-ins for EVERY individual week of their tenure.'
         }
       });
     }
@@ -68,53 +68,43 @@ const requestCompletionLetter = async (req, res) => {
           from: process.env.SMTP_FROM || '"MIST Student Portal" <no-reply@mist.gov.ng>',
           to: student.email,
           subject: 'Official SIWES Completion Certificate // Lagos State MIST',
-          text: `Dear ${student.name},\n\nCongratulations on completing your SIWES Industrial Attachment at the Lagos State Ministry of Innovation, Science and Technology.\n\nPlease find attached your official Completion Certificate.\n\nVerification Serial: ${serialNumber}\n\nDirectorate of ICT, MIST Lagos State.`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #E2E8F0; border-radius: 8px;">
-              <h2 style="color: #1A365D; margin-top: 0;">Official SIWES Completion Certificate</h2>
-              <p style="color: #334155; line-height: 1.6;">Dear <strong>${student.name}</strong>,</p>
-              <p style="color: #334155; line-height: 1.6;">
-                Congratulations on successfully completing all curriculum milestones and attendance regulations for your SIWES Industrial Training in the <strong>${student.unit}</strong> unit at the <strong>Lagos State Ministry of Innovation, Science and Technology (MIST)</strong>.
-              </p>
-              <div style="background-color: #F8FAFC; border-left: 4px solid #008751; padding: 12px 16px; margin: 20px 0;">
-                <p style="margin: 0; font-size: 13px; color: #64748B;">Verification Serial Number:</p>
-                <p style="margin: 4px 0 0 0; font-size: 16px; font-weight: bold; color: #1A365D; font-family: monospace;">${serialNumber}</p>
-              </div>
-              <p style="color: #334155; line-height: 1.6;">Your signed certificate is attached to this email as a high-resolution PDF document.</p>
-              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0;" />
-              <p style="font-size: 12px; color: #94A3B8; text-align: center;">Lagos State Ministry of Innovation, Science and Technology • Alausa Secretariat, Ikeja</p>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+              <h2 style="color: #0f172a;">Congratulations, ${student.name}!</h2>
+              <p>We are pleased to inform you that you have satisfied all attendance and SIWES curriculum requirements at the <strong>Lagos State Ministry of Innovation, Science and Technology (MIST)</strong>.</p>
+              <p>Your official SIWES Completion Certificate (Serial: <strong>${serialNumber}</strong>) is attached to this email.</p>
+              <br/>
+              <p>Best regards,<br/><strong>MIST Student IT Administration</strong></p>
             </div>
           `,
           attachments: [
             {
-              filename: `MIST_SIWES_Completion_Certificate_${student.matricNumber || 'Intern'}.pdf`,
+              filename: `MIST_SIWES_Completion_Certificate_${serialNumber}.pdf`,
               content: pdfBuffer,
               contentType: 'application/pdf'
             }
           ]
         });
-
         emailSent = true;
-        console.log(`Completion Certificate dispatched via email to ${student.email}`);
-      } catch (mailErr) {
-        console.error('Failed to send certificate email:', mailErr.message);
+      } catch (err) {
+        console.error('Failed to dispatch certificate email:', err.message);
       }
     }
 
-    // 4. Update Student State: Cleared for Completion
+    // 4. Mark student as cleared
     student.isClearedForCompletion = true;
     await student.save();
 
     return res.status(200).json({
       status: 'success',
-      message: 'Congratulations! Official MIST Completion Certificate generated and approved.',
+      message: emailSent
+        ? 'Certificate generated and emailed successfully.'
+        : 'Certificate generated successfully.',
       data: {
         serialNumber,
         isClearedForCompletion: true,
         emailSent,
-        recipientEmail: student.email,
-        pdfBase64: pdfBuffer.toString('base64'),
-        fileName: `MIST_SIWES_Completion_Certificate_${student.matricNumber || 'Intern'}.pdf`
+        pdfBase64: pdfBuffer.toString('base64')
       }
     });
   } catch (error) {
@@ -124,22 +114,26 @@ const requestCompletionLetter = async (req, res) => {
 };
 
 /**
- * Returns current clearance eligibility status and whether student is already cleared.
- * GET /api/clearance/status
+ * Returns student's clearance status and eligibility metrics.
+ * GET /api/clearance/status (for student) or GET /api/clearance/status/:studentId (for supervisor)
  */
 const getClearanceStatus = async (req, res) => {
   try {
-    const student = await User.findById(req.user._id);
+    const targetId = (req.user.role === 'supervisor' && req.params.studentId)
+      ? req.params.studentId
+      : req.user.id;
+
+    const student = await User.findByPk(targetId);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
 
-    const eligibility = await checkClearanceEligibility(student._id);
+    const eligibility = await checkClearanceEligibility(student.id);
 
     return res.status(200).json({
       status: 'success',
       data: {
-        isClearedForCompletion: student.isClearedForCompletion || false,
+        isClearedForCompletion: student.isClearedForCompletion,
         eligibility
       }
     });
@@ -149,7 +143,37 @@ const getClearanceStatus = async (req, res) => {
   }
 };
 
+/**
+ * Supervisor clearance approval
+ * POST /api/clearance/approve/:studentId
+ */
+const approveClearance = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const student = await User.findByPk(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    student.isClearedForCompletion = true;
+    await student.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Student ${student.name} has been officially cleared by supervisor.`,
+      data: {
+        studentId: student.id,
+        isClearedForCompletion: student.isClearedForCompletion
+      }
+    });
+  } catch (error) {
+    console.error('Approve clearance error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   requestCompletionLetter,
-  getClearanceStatus
+  getClearanceStatus,
+  approveClearance
 };
