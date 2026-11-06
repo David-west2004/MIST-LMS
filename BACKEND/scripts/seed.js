@@ -8,7 +8,7 @@ const seedData = async () => {
     const supervisorName = process.env.SUPERVISOR_NAME || process.env.ADMIN_NAME || process.env.SEED_ADMIN_NAME || 'MIST Portal Supervisor';
 
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('MySQL connected and schema synchronized for seeding.');
 
     // Clear existing materials

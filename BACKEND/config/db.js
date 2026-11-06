@@ -22,7 +22,7 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log(`MySQL Connected successfully via Sequelize: ${process.env.MYSQL_HOST || 'localhost'}:${process.env.MYSQL_PORT || 3306}/${process.env.MYSQL_DATABASE || 'mist_lms_db'}`);
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('Sequelize models synchronized successfully with MySQL.');
   } catch (error) {
     console.error(`Unable to connect to MySQL database: ${error.message}`);
