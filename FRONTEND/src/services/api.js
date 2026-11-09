@@ -76,10 +76,14 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   getMe: () => request('/auth/me'),
 
-  // Curriculum Management
+  // Curriculum & Unit Management
   getMyCurriculum: () => request('/curriculum/my-unit'),
   getCurricula: () => request('/curriculum'),
-  getUnits: () => request('/curriculum/units'),
+  getUnits: () => request('/units'),
+  createUnit: (data) => request('/units', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   createCurriculum: (unit, modules) => request('/curriculum', {
     method: 'POST',
     body: JSON.stringify({ unit, modules })

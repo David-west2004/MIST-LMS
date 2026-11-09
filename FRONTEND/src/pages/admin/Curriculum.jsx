@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../../services/api';
-import { useUnits } from '../../hooks/useUnits';
-import { Plus, Trash2, Save, AlertTriangle, Upload, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Save, AlertTriangle, Upload, CheckCircle2, Building2 } from 'lucide-react';
 
 const Curriculum = () => {
-  const { units, loading: loadingUnits, refetchUnits } = useUnits();
+  const [units, setUnits] = useState([]);
+  const [loadingUnits, setLoadingUnits] = useState(true);
   const [selectedUnit, setSelectedUnit] = useState('');
   const [curriculum, setCurriculum] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,18 +14,64 @@ const Curriculum = () => {
   // States for adding a new unit
   const [showAddUnit, setShowAddUnit] = useState(false);
   const [newUnitName, setNewUnitName] = useState('');
+  const [newUnitCode, setNewUnitCode] = useState('');
   const [creatingUnit, setCreatingUnit] = useState(false);
 
-  // Set default selected unit when units load
+  // Helper to extract unit name string regardless of whether it's an object or string
+  const getUnitName = (u) => (typeof u === 'object' && u !== null ? u.name : String(u || ''));
+  const getUnitCode = (u) => (typeof u === 'object' && u !== null ? (u.code || '') : '');
+
+  // Extract list of all unit names
+  const validUnitNames = useMemo(() => {
+    return units.map(getUnitName).filter(Boolean);
+  }, [units]);
+
+  // Check if current selectedUnit is valid
+  const isValidSelectedUnit = useMemo(() => {
+    return Boolean(selectedUnit && validUnitNames.includes(selectedUnit));
+  }, [selectedUnit, validUnitNames]);
+
+  // Fetch /api/units on component mount
+  const fetchUnits = useCallback(async () => {
+    setLoadingUnits(true);
+    try {
+      const res = await api.getUnits();
+      const unitList = res?.data?.units || res?.units || (Array.isArray(res) ? res : []);
+      setUnits(unitList);
+      return unitList;
+    } catch (err) {
+      console.error('Error fetching /api/units:', err.message);
+      try {
+        const fallbackRes = await fetch('http://localhost:5000/api/units');
+        const data = await fallbackRes.json();
+        const list = data?.data?.units || data?.units || (Array.isArray(data) ? data : []);
+        setUnits(list);
+        return list;
+      } catch (e) {
+        console.error('Fallback fetch also failed:', e);
+        return [];
+      }
+    } finally {
+      setLoadingUnits(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (units.length > 0 && (!selectedUnit || !units.includes(selectedUnit))) {
-      setSelectedUnit(units[0]);
-    } else if (units.length === 0 && !loadingUnits) {
+    fetchUnits();
+  }, [fetchUnits]);
+
+  // Set default selected unit when units load or update
+  useEffect(() => {
+    if (validUnitNames.length > 0) {
+      if (!selectedUnit || !validUnitNames.includes(selectedUnit)) {
+        setSelectedUnit(validUnitNames[0]);
+      }
+    } else if (validUnitNames.length === 0 && !loadingUnits) {
       setSelectedUnit('');
       setCurriculum(null);
       setLoading(false);
     }
-  }, [units, selectedUnit, loadingUnits]);
+  }, [validUnitNames, selectedUnit, loadingUnits]);
 
   const fetchCurriculum = async (unitName) => {
     if (!unitName) {
@@ -36,7 +82,7 @@ const Curriculum = () => {
     setLoading(true);
     try {
       const res = await api.getCurriculumByUnit(unitName);
-      setCurriculum(res.data.curriculum);
+      setCurriculum(res.data?.curriculum || null);
     } catch (err) {
       if (err.status === 404) {
         setCurriculum({ unit: unitName, modules: [] });
@@ -59,19 +105,26 @@ const Curriculum = () => {
     const trimmed = newUnitName.trim();
     if (!trimmed) return;
 
-    if (units.some(u => u.toLowerCase() === trimmed.toLowerCase())) {
+    if (validUnitNames.some(u => u.toLowerCase() === trimmed.toLowerCase())) {
       alert(`A unit named "${trimmed}" already exists.`);
       return;
     }
 
     setCreatingUnit(true);
     try {
-      await api.createCurriculum(trimmed, []);
-      alert(`Unit "${trimmed}" added successfully.`);
+      await api.createUnit({
+        name: trimmed,
+        code: newUnitCode.trim() || undefined
+      });
+      alert(`Department/Unit "${trimmed}" added successfully.`);
       setNewUnitName('');
+      setNewUnitCode('');
       setShowAddUnit(false);
-      await refetchUnits();
-      setSelectedUnit(trimmed);
+      const updatedList = await fetchUnits();
+      const updatedNames = (updatedList || []).map(getUnitName);
+      if (updatedNames.includes(trimmed)) {
+        setSelectedUnit(trimmed);
+      }
     } catch (err) {
       alert(err.message || 'Failed to create unit.');
     } finally {
@@ -79,17 +132,22 @@ const Curriculum = () => {
     }
   };
 
-  // 100% Immutable Module addition
+  // 100% Immutable Module addition bound to valid selected unit
   const handleAddModule = (e) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+    if (!isValidSelectedUnit) {
+      alert('Please select a valid department/unit before adding modules.');
+      return;
+    }
     setCurriculum(prev => {
-      if (!prev) return prev;
+      if (!prev) return { unit: selectedUnit, modules: [{ title: 'New Module 1', description: '', materials: [] }] };
       const currentModules = prev.modules || [];
       return {
         ...prev,
+        unit: selectedUnit,
         modules: [
           ...currentModules,
           {
@@ -134,16 +192,21 @@ const Curriculum = () => {
     });
   };
 
-  // 100% Immutable Material addition
+  // 100% Immutable Material addition directly bound to valid selected unit
   const handleAddMaterial = (modIdx, e) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+    if (!isValidSelectedUnit) {
+      alert('Please select a valid department/unit before adding materials.');
+      return;
+    }
     setCurriculum(prev => {
       if (!prev) return prev;
       return {
         ...prev,
+        unit: selectedUnit,
         modules: (prev.modules || []).map((mod, idx) => {
           if (idx !== modIdx) return mod;
           return {
@@ -153,7 +216,8 @@ const Curriculum = () => {
               {
                 title: 'New Resource',
                 type: 'pdf',
-                url: ''
+                url: '',
+                unit: selectedUnit // Binds material directly to valid selected unit
               }
             ]
           };
@@ -197,7 +261,8 @@ const Curriculum = () => {
               if (mIdx !== matIdx) return mat;
               return {
                 ...mat,
-                [field]: value
+                [field]: value,
+                unit: selectedUnit // Preserves binding to valid selected unit
               };
             })
           };
@@ -210,6 +275,11 @@ const Curriculum = () => {
   const handleFileUpload = async (modIdx, matIdx, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!isValidSelectedUnit) {
+      alert('Please select a valid department/unit before uploading materials.');
+      return;
+    }
 
     const key = `${modIdx}-${matIdx}`;
     setUploadingState(prev => ({ ...prev, [key]: true }));
@@ -225,6 +295,7 @@ const Curriculum = () => {
         if (!prev) return prev;
         return {
           ...prev,
+          unit: selectedUnit,
           modules: (prev.modules || []).map((mod, idx) => {
             if (idx !== modIdx) return mod;
             return {
@@ -235,7 +306,8 @@ const Curriculum = () => {
                   ...mat,
                   title: mat.title === 'New Resource' || !mat.title ? fileName : mat.title,
                   type: fileType || mat.type || 'pdf',
-                  url: fileUrl
+                  url: fileUrl,
+                  unit: selectedUnit // Binds material directly to valid selected unit
                 };
               })
             };
@@ -254,19 +326,32 @@ const Curriculum = () => {
       e.preventDefault();
       e.stopPropagation();
     }
+    if (!isValidSelectedUnit) {
+      alert('Please select a valid department/unit before saving curriculum.');
+      return;
+    }
     setSaving(true);
     try {
+      // Ensure all materials are explicitly bound to the valid selected unit
+      const sanitizedModules = (curriculum.modules || []).map(mod => ({
+        ...mod,
+        materials: (mod.materials || []).map(mat => ({
+          ...mat,
+          unit: selectedUnit
+        }))
+      }));
+
       if (curriculum._id) {
         await api.updateCurriculum(curriculum._id, {
-          unit: curriculum.unit,
-          modules: curriculum.modules
+          unit: selectedUnit,
+          modules: sanitizedModules
         });
         alert('Curriculum updated successfully.');
       } else {
-        const res = await api.createCurriculum(curriculum.unit, curriculum.modules);
+        const res = await api.createCurriculum(selectedUnit, sanitizedModules);
         setCurriculum(res.data.curriculum);
         alert('Curriculum created successfully.');
-        await fetchUnits(curriculum.unit);
+        await fetchUnits();
       }
     } catch (err) {
       alert(err.message || 'Failed to save curriculum.');
@@ -280,15 +365,16 @@ const Curriculum = () => {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (!curriculum._id) return;
+    if (!curriculum?._id) return;
     if (!window.confirm(`Are you sure you want to delete the curriculum for ${selectedUnit}?`)) return;
 
     try {
       await api.deleteCurriculum(curriculum._id);
       alert('Curriculum deleted.');
-      const updatedUnits = await refetchUnits();
-      if (updatedUnits.length > 0) {
-        setSelectedUnit(updatedUnits[0]);
+      const updatedList = await fetchUnits();
+      const updatedNames = (updatedList || []).map(getUnitName);
+      if (updatedNames.length > 0) {
+        setSelectedUnit(updatedNames[0]);
       } else {
         setSelectedUnit('');
         setCurriculum(null);
@@ -302,25 +388,95 @@ const Curriculum = () => {
     <div className="animate-slide-in editor-layout">
       {/* Selector sidebar */}
       <div className="editor-sidebar" style={{ display: 'flex', flexDirection: 'column', minHeight: '300px' }}>
-        <h3 className="editor-sidebar-title">Select Unit</h3>
+        <h3 className="editor-sidebar-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Building2 size={18} />
+          Department / Unit
+        </h3>
+
+        {/* Dedicated Department Selection Dropdown */}
+        <div style={{ marginBottom: '14px' }}>
+          <label
+            htmlFor="department-select"
+            style={{
+              display: 'block',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--text-secondary, #4A5568)',
+              marginBottom: '6px'
+            }}
+          >
+            Select Department
+          </label>
+          <select
+            id="department-select"
+            aria-label="Department selection dropdown"
+            className="form-control"
+            value={selectedUnit}
+            onChange={(e) => setSelectedUnit(e.target.value)}
+            disabled={loadingUnits}
+            style={{
+              width: '100%',
+              height: '38px',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              borderColor: isValidSelectedUnit ? '#3182CE' : 'var(--border-color)',
+              backgroundColor: '#FFFFFF',
+              color: '#1A202C'
+            }}
+          >
+            <option value="">-- Choose a Department --</option>
+            {units.map((unit) => {
+              const name = getUnitName(unit);
+              const code = getUnitCode(unit);
+              return (
+                <option key={name} value={name}>
+                  {name} {code ? `(${code})` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        {/* Unit list button items for quick switching */}
         <div className="editor-unit-list" style={{ flex: 1, overflowY: 'auto' }}>
-          {units.map((unit) => (
-            <button
-              key={unit}
-              type="button"
-              onClick={() => setSelectedUnit(unit)}
-              className={`editor-unit-btn ${unit === selectedUnit ? 'active' : ''}`}
-            >
-              {unit}
-            </button>
-          ))}
-          {units.length === 0 && (
+          {units.map((unit) => {
+            const name = getUnitName(unit);
+            const code = getUnitCode(unit);
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setSelectedUnit(name)}
+                className={`editor-unit-btn ${name === selectedUnit ? 'active' : ''}`}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>{name}</span>
+                {code && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      opacity: 0.8,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: name === selectedUnit ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)'
+                    }}
+                  >
+                    {code}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {units.length === 0 && !loadingUnits && (
             <div style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               No units defined yet.
             </div>
           )}
         </div>
 
+        {/* Create Unit Flow */}
         <div style={{ padding: '16px 0 0', borderTop: '1px solid var(--border-color)', marginTop: '16px' }}>
           {!showAddUnit ? (
             <button
@@ -337,11 +493,19 @@ const Curriculum = () => {
               <input
                 type="text"
                 className="form-control form-control-sm"
-                placeholder="Unit/Dept Name"
+                placeholder="Department Name *"
                 value={newUnitName}
                 onChange={(e) => setNewUnitName(e.target.value)}
                 required
                 autoFocus
+                style={{ fontSize: '0.8125rem', height: '32px' }}
+              />
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="Code (e.g. SD, EA)"
+                value={newUnitCode}
+                onChange={(e) => setNewUnitCode(e.target.value)}
                 style={{ fontSize: '0.8125rem', height: '32px' }}
               />
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -355,7 +519,7 @@ const Curriculum = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAddUnit(false); setNewUnitName(''); }}
+                  onClick={() => { setShowAddUnit(false); setNewUnitName(''); setNewUnitCode(''); }}
                   className="btn btn-secondary btn-sm"
                   style={{ flex: 1, fontSize: '0.75rem', height: '28px', gap: '0' }}
                 >
@@ -369,25 +533,42 @@ const Curriculum = () => {
 
       {/* Editor Content Area */}
       <div className="editor-area">
-        {loading ? (
+        {loading || loadingUnits ? (
           <div className="editor-center-loader">
             <div className="spinner" />
           </div>
-        ) : !selectedUnit || !curriculum ? (
+        ) : !isValidSelectedUnit || !curriculum ? (
           <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 32px', color: 'var(--text-secondary)', textAlign: 'center' }}>
             <AlertTriangle size={32} style={{ color: 'var(--color-primary)', marginBottom: '16px' }} />
-            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: '700', color: '#1A365D', marginBottom: '8px', fontSize: '1.25rem' }}>No Unit Selected</h3>
-            <p style={{ maxWidth: '360px', fontSize: '0.875rem', margin: '0 auto', lineHeight: '1.5' }}>
-              Please select a department/unit from the sidebar, or create a new one to define its curriculum and modules.
+            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: '700', color: '#1A365D', marginBottom: '8px', fontSize: '1.25rem' }}>
+              {!selectedUnit ? 'No Department Selected' : `Invalid Department: "${selectedUnit}"`}
+            </h3>
+            <p style={{ maxWidth: '380px', fontSize: '0.875rem', margin: '0 auto', lineHeight: '1.5' }}>
+              Please select a valid department/unit from the dropdown, or create a new one to bind curriculum materials directly to it.
             </p>
           </div>
         ) : (
           <div className="editor-container">
             <div className="editor-header">
               <div>
-                <h3 className="editor-title">{selectedUnit} Curriculum</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <h3 className="editor-title" style={{ margin: 0 }}>{selectedUnit} Curriculum</h3>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      backgroundColor: '#EBF8FF',
+                      color: '#2B6CB0',
+                      border: '1px solid #BEE3F8'
+                    }}
+                  >
+                    Bound to: {selectedUnit}
+                  </span>
+                </div>
                 <p className="editor-subtitle">
-                  {curriculum._id ? 'Modify current modules and items' : 'No curriculum defined yet for this department'}
+                  {curriculum._id ? 'Modify current modules and items for this department' : 'No curriculum defined yet for this department'}
                 </p>
               </div>
               <div className="editor-header-actions">
@@ -406,7 +587,7 @@ const Curriculum = () => {
                   type="button" 
                   onClick={handleSave} 
                   className="btn btn-primary" 
-                  disabled={saving}
+                  disabled={saving || !isValidSelectedUnit}
                 >
                   <Save size={18} />
                   {saving ? 'Saving...' : 'Save Curriculum'}
@@ -461,7 +642,7 @@ const Curriculum = () => {
                               placeholder="Resource Name"
                             />
 
-                            {/* Dropdown with only file formats (LINK removed) */}
+                            {/* Dropdown with file formats */}
                             <select
                               value={material.type}
                               onChange={(e) => handleMaterialChange(modIdx, matIdx, 'type', e.target.value)}
@@ -472,7 +653,7 @@ const Curriculum = () => {
                               <option value="video">Video (.mp4)</option>
                             </select>
 
-                            {/* File Upload Control replacing raw URL text field */}
+                            {/* File Upload Control */}
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <label 
                                 style={{
@@ -536,6 +717,8 @@ const Curriculum = () => {
                       type="button"
                       onClick={(e) => handleAddMaterial(modIdx, e)}
                       className="btn btn-secondary btn-sm editor-add-material-btn"
+                      disabled={!isValidSelectedUnit}
+                      title={`Add resource bound to ${selectedUnit}`}
                     >
                       <Plus size={14} />
                       Add Resource
@@ -549,6 +732,7 @@ const Curriculum = () => {
               type="button"
               onClick={handleAddModule}
               className="btn btn-secondary editor-add-module-dash-btn"
+              disabled={!isValidSelectedUnit}
             >
               <Plus size={18} />
               Add Module Block

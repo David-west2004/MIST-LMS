@@ -1,5 +1,6 @@
-require('dotenv').config({ path: '../.env' });
-const { sequelize, User, Material } = require('../models');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const { sequelize, User, Material, Unit } = require('../models');
 
 const seedData = async () => {
   try {
@@ -10,6 +11,21 @@ const seedData = async () => {
     await sequelize.authenticate();
     await sequelize.sync();
     console.log('MySQL connected and schema synchronized for seeding.');
+
+    // Seed initial units: 'Software Development', 'Enterprise Applications', 'Administration'
+    const initialUnits = [
+      { name: 'Software Development', code: 'SD' },
+      { name: 'Enterprise Applications', code: 'EA' },
+      { name: 'Administration', code: 'ADM' }
+    ];
+
+    for (const unitData of initialUnits) {
+      await Unit.findOrCreate({
+        where: { name: unitData.name },
+        defaults: unitData
+      });
+    }
+    console.log('Successfully seeded initial units: Software Development, Enterprise Applications, Administration.');
 
     // Clear existing materials
     await Material.destroy({ where: {} });

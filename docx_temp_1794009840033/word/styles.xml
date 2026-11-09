@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>
+        <w:sz w:val="24"/>
+        <w:color w:val="2D3748"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:spacing w:after="160" w:line="276" w:lineRule="auto"/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:pPr>
+      <w:spacing w:before="360" w:after="160"/>
+    </w:pPr>
+    <w:rPr>
+      <w:rFonts w:ascii="Calibri Light" w:hAnsi="Calibri Light"/>
+      <w:b/>
+      <w:color w:val="1A365D"/>
+      <w:sz w:val="36"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:pPr>
+      <w:spacing w:before="240" w:after="120"/>
+    </w:pPr>
+    <w:rPr>
+      <w:rFonts w:ascii="Calibri Light" w:hAnsi="Calibri Light"/>
+      <w:b/>
+      <w:color w:val="008751"/>
+      <w:sz w:val="30"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:pPr>
+      <w:spacing w:before="180" w:after="80"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:color w:val="1A365D"/>
+      <w:sz w:val="26"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="table" w:styleId="TableGrid">
+    <w:name w:val="Table Grid"/>
+    <w:tblPr>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:space="0" w:color="CBD5E0"/>
+        <w:left w:val="single" w:sz="4" w:space="0" w:color="CBD5E0"/>
+        <w:bottom w:val="single" w:sz="4" w:space="0" w:color="CBD5E0"/>
+        <w:right w:val="single" w:sz="4" w:space="0" w:color="CBD5E0"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>
+        <w:insideV w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>
+      </w:tblBorders>
+    </w:tblPr>
+  </w:style>
+</w:styles>

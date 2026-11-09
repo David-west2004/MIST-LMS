@@ -6,6 +6,7 @@ const Curriculum = require('./Curriculum');
 const Assignment = require('./Assignment');
 const Submission = require('./Submission');
 const Progress = require('./Progress');
+const Unit = require('./Unit');
 
 // Setup Associations / Relationships
 User.hasMany(Attendance, { foreignKey: 'userId', as: 'attendances', onDelete: 'CASCADE' });
@@ -31,5 +32,6 @@ module.exports = {
   Curriculum,
   Assignment,
   Submission,
-  Progress
+  Progress,
+  Unit
 };
